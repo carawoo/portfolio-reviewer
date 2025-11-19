@@ -112,12 +112,14 @@ export const InterviewReview: React.FC<InterviewReviewProps> = ({
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-          <Text style={styles.closeButtonText}>닫기</Text>
+        <TouchableOpacity style={styles.continueButton} onPress={onClose}>
+          <Text style={styles.continueButtonText}>계속 대화하기</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>
-            저장하기 ({difficultQuestions.size}개 체크됨)
+            {difficultQuestions.size > 0
+              ? `저장하기 (${difficultQuestions.size}개 체크됨)`
+              : '저장하기'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -245,16 +247,16 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
   },
-  closeButton: {
+  continueButton: {
     flex: 1,
     backgroundColor: '#F5F5F5',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
-  closeButtonText: {
-    color: '#000000',
-    fontSize: 16,
+  continueButtonText: {
+    color: '#666666',
+    fontSize: 15,
     fontWeight: '600',
   },
   saveButton: {

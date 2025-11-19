@@ -152,17 +152,41 @@ export default function App() {
     }
 
     try {
-      saveInterviewRecord(
+      const savedRecord = saveInterviewRecord(
         selectedCompany,
         selectedPosition,
         selectedExperience,
         messages,
         difficultQuestionIds
       );
+
+      // 저장 후 선택지 제공
       Alert.alert(
-        '저장 완료',
-        '면접 내용이 저장되었습니다.\n어려웠던 질문은 나중에 다시 볼 수 있어요!',
-        [{ text: '확인', onPress: handleReset }]
+        '저장 완료! 🎉',
+        difficultQuestionIds.length > 0
+          ? `면접 내용이 저장되었습니다.\n어려웠던 질문 ${difficultQuestionIds.length}개를 체크하셨네요!`
+          : '면접 내용이 저장되었습니다.',
+        [
+          {
+            text: '바로 복습하기',
+            onPress: () => {
+              setSelectedRecord(savedRecord);
+              setShowDifficultOnly(difficultQuestionIds.length > 0);
+              setCurrentStep('viewRecord');
+            },
+          },
+          {
+            text: '저장 목록 보기',
+            onPress: () => {
+              setCurrentStep('saved');
+            },
+          },
+          {
+            text: '새 면접 시작',
+            style: 'cancel',
+            onPress: handleReset,
+          },
+        ]
       );
     } catch (error) {
       Alert.alert('오류', '저장에 실패했습니다.');
@@ -190,6 +214,31 @@ export default function App() {
     setSelectedRecord(null);
     setShowDifficultOnly(false);
     setCurrentStep('saved');
+  };
+
+  const handleRetryInterview = (record: InterviewRecord) => {
+    Alert.alert(
+      '다시 연습하기',
+      `${record.company.name} ${record.position} 면접을\n다시 연습하시겠어요?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '시작하기',
+          onPress: () => {
+            // 이전 설정으로 새 면접 시작
+            setSelectedCompany(record.company);
+            setSelectedPosition(record.position);
+            setSelectedExperience(record.experience);
+            setMessages([]);
+            setUploadedFile(null);
+            setUploadedFiles([]);
+            setSelectedRecord(null);
+            setShowDifficultOnly(false);
+            setCurrentStep('upload');
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -311,14 +360,22 @@ export default function App() {
               <TouchableOpacity onPress={handleCloseRecord} style={styles.backButton}>
                 <Text style={styles.backButtonText}>← 목록</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterButton, showDifficultOnly && styles.filterButtonActive]}
-                onPress={() => setShowDifficultOnly(!showDifficultOnly)}
-              >
-                <Text style={[styles.filterButtonText, showDifficultOnly && styles.filterButtonTextActive]}>
-                  {showDifficultOnly ? '✓ 어려운 질문만' : '어려운 질문만'}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.headerButtonGroup}>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => handleRetryInterview(selectedRecord)}
+                >
+                  <Text style={styles.retryButtonText}>↻ 다시 연습</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.filterButton, showDifficultOnly && styles.filterButtonActive]}
+                  onPress={() => setShowDifficultOnly(!showDifficultOnly)}
+                >
+                  <Text style={[styles.filterButtonText, showDifficultOnly && styles.filterButtonTextActive]}>
+                    {showDifficultOnly ? '✓ 어려운 질문만' : '어려운 질문만'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <ScrollView style={styles.viewRecordContent} showsVerticalScrollIndicator={false}>
               <View style={styles.recordMetaInfo}>
@@ -531,6 +588,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#000000',
+  },
+  headerButtonGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  retryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#E8F5E9',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2E7D32',
   },
   filterButton: {
     paddingVertical: 8,
