@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Alert, Platform, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Platform, ScrollView } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { UploadedFile } from '../types';
@@ -137,14 +137,14 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
             });
           } catch (error: any) {
             console.error(`Error processing ${file.name}:`, error);
-            Alert.alert('오류', `${file.name}: ${error.message}`);
+            alert(`${file.name}: ${error.message}`);
           }
         }
 
         console.log(`총 크기: ${totalSize.toFixed(2)}MB`);
 
         if (totalSize > 4) {
-          Alert.alert('오류', `압축 후 총 크기가 ${totalSize.toFixed(2)}MB입니다. 이미지를 더 적게 선택하거나 해상도가 낮은 이미지를 사용해주세요.`);
+          alert(`압축 후 총 크기가 ${totalSize.toFixed(2)}MB입니다.\n이미지를 더 적게 선택하거나 해상도가 낮은 이미지를 사용해주세요.`);
           return;
         }
 
@@ -171,8 +171,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
       console.log('File input changed, files:', e.target.files);
       const file = e.target.files?.[0];
       if (file) {
-        if (file.size > 4 * 1024 * 1024) {
-          Alert.alert('오류', 'PDF 파일은 4MB를 초과할 수 없습니다.');
+        // PDF 용량 제한 20MB로 증가
+        const MAX_PDF_SIZE = 20 * 1024 * 1024; // 20MB
+        if (file.size > MAX_PDF_SIZE) {
+          const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+          alert(`PDF 파일이 너무 큽니다 (${sizeInMB}MB).\n20MB 이하의 파일을 사용해주세요.`);
           return;
         }
 
@@ -194,7 +197,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
           onFileSelect(uploadedFile);
         } catch (error) {
           console.error('Document processing error:', error);
-          Alert.alert('오류', '파일을 처리할 수 없습니다.');
+          alert('파일을 처리할 수 없습니다.');
         } finally {
           setIsProcessing(false);
         }
@@ -205,7 +208,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
 
   const pickImage = async () => {
     console.log('pickImage called, isWeb:', isWeb);
-    
+
     if (isWeb) {
       pickImageWeb();
       return;
@@ -213,7 +216,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
 
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
-      Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
+      alert('사진 라이브러리 접근 권한이 필요합니다.');
       return;
     }
 
@@ -271,8 +274,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
         <Text style={styles.title}>포트폴리오 업로드</Text>
         <Text style={styles.subtitle}>이미지 또는 PDF 파일을 업로드해주세요</Text>
         <Text style={styles.sizeLimit}>• 이미지: 여러 개 선택 가능 (자동 최적화)</Text>
-        <Text style={styles.sizeLimit}>• PDF: 최대 4MB</Text>
-        <Text style={styles.sizeTip}>💡 큰 PDF는 이미지로 변환 후 여러 장 업로드하세요</Text>
+        <Text style={styles.sizeLimit}>• PDF: 최대 20MB</Text>
+        <Text style={styles.sizeTip}>💡 대용량 PDF도 업로드 가능! 처리 시간이 조금 걸릴 수 있어요</Text>
       </View>
 
       <View style={styles.uploadArea}>
