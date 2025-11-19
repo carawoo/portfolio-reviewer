@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, Platform, ScrollView } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,6 +15,46 @@ const isWeb = Platform.OS === 'web';
 console.log('FileUpload component loaded');
 console.log('Platform.OS:', Platform.OS);
 console.log('isWeb:', isWeb);
+
+// PDF.js 타입 선언
+declare global {
+  interface Window {
+    pdfjsLib?: any;
+  }
+}
+
+// PDF.js CDN에서 로드
+const loadPdfJs = (): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') {
+      reject(new Error('Not in browser environment'));
+      return;
+    }
+
+    // 이미 로드되어 있으면 바로 resolve
+    if (window.pdfjsLib) {
+      resolve();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.async = true;
+    script.onload = () => {
+      if (window.pdfjsLib) {
+        // Worker 설정
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        console.log('PDF.js loaded successfully');
+        resolve();
+      } else {
+        reject(new Error('PDF.js failed to load'));
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load PDF.js script'));
+    document.head.appendChild(script);
+  });
+};
 
 // 이미지를 리사이즈하고 압축
 const resizeAndCompressImage = (file: Blob): Promise<string> => {
@@ -102,14 +142,15 @@ const convertPdfToImages = async (
   onProgress?: (current: number, total: number) => void
 ): Promise<UploadedFile[]> => {
   try {
-    // 동적으로 pdfjs-dist import (웹 환경에서만)
-    const pdfjsLib = await import('pdfjs-dist');
+    // PDF.js 로드
+    await loadPdfJs();
 
-    // PDF.js worker 설정
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    if (!window.pdfjsLib) {
+      throw new Error('PDF.js 라이브러리를 로드할 수 없습니다.');
+    }
 
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const numPages = pdf.numPages;
     const uploadedFiles: UploadedFile[] = [];
 
@@ -170,6 +211,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState<string>('');
   const [conversionProgress, setConversionProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // PDF.js 미리 로드 (웹 환경에서만)
+  useEffect(() => {
+    if (isWeb) {
+      loadPdfJs().catch((error) => {
+        console.warn('PDF.js 사전 로드 실패 (필요할 때 다시 시도됩니다):', error);
+      });
+    }
+  }, []);
 
   const pickImageWeb = () => {
     console.log('pickImageWeb called');

@@ -16,7 +16,6 @@
     "expo-image-picker": "~17.0.8",
     "expo-status-bar": "~3.0.8",
     "openai": "^6.9.1",
-    "pdfjs-dist": "^5.4.394",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
