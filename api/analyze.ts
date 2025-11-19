@@ -211,7 +211,7 @@ ${body.company.portfolioTips.map((tip, i) => `${i + 1}. ${tip}`).join('\n')}
               {
                 type: 'image_url',
                 image_url: {
-                  url: `data:${file.mimeType};base64,${file.base64}`,
+                  url: `data:${body.file.mimeType};base64,${body.file.base64}`,
                 },
               },
             ],
