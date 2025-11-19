@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, SafeAreaView, TouchableOpacity, Text, Alert, ScrollView } from 'react-native';
+import { StyleSheet, View, SafeAreaView, TouchableOpacity, Text, ScrollView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { FileUpload } from './components/FileUpload';
 import { CompanySelector } from './components/CompanySelector';
 import { ChatInterface } from './components/ChatInterface';
 import { InterviewReview } from './components/InterviewReview';
 import { SavedInterviews } from './components/SavedInterviews';
+import { SaveSuccessModal } from './components/SaveSuccessModal';
 import { UploadedFile, Company, Message, Position, Experience, InterviewRecord } from './types';
 import { analyzePortfolio } from './services/api';
 import { saveInterviewRecord, getDifficultQuestions } from './services/storage';
@@ -23,6 +24,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<InterviewRecord | null>(null);
   const [showDifficultOnly, setShowDifficultOnly] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [lastSavedRecord, setLastSavedRecord] = useState<InterviewRecord | null>(null);
+  const [lastDifficultCount, setLastDifficultCount] = useState(0);
 
   const handleFileSelect = (file: UploadedFile, allFiles?: UploadedFile[]) => {
     setUploadedFile(file);
@@ -43,7 +47,7 @@ export default function App() {
 
   const handleStartAnalysis = async () => {
     if (!uploadedFile || !selectedCompany || !selectedPosition || !selectedExperience) {
-      Alert.alert('알림', '파일, 회사, 직무, 경력을 모두 선택해주세요.');
+      alert('파일, 회사, 직무, 경력을 모두 선택해주세요.');
       return;
     }
 
@@ -80,7 +84,7 @@ export default function App() {
     } catch (error: any) {
       console.error('Error starting analysis:', error);
       const errorMsg = error.response?.data?.error || error.message || '분석을 시작할 수 없습니다.';
-      Alert.alert('오류', errorMsg);
+      alert(`오류: ${errorMsg}`);
       setCurrentStep('company');
     } finally {
       setIsLoading(false);
@@ -120,7 +124,7 @@ export default function App() {
 
       setMessages([...updatedMessages, aiMessage]);
     } catch (error: any) {
-      Alert.alert('오류', error.message || '메시지를 전송할 수 없습니다.');
+      alert(`오류: ${error.message || '메시지를 전송할 수 없습니다.'}`);
       console.error(error);
     } finally {
       setIsLoading(false);
@@ -139,7 +143,7 @@ export default function App() {
 
   const handleEndInterview = () => {
     if (messages.length === 0) {
-      Alert.alert('알림', '면접 내용이 없습니다.');
+      alert('면접 내용이 없습니다.');
       return;
     }
     setCurrentStep('review');
@@ -147,7 +151,7 @@ export default function App() {
 
   const handleSaveReview = (difficultQuestionIds: string[]) => {
     if (!selectedCompany || !selectedPosition || !selectedExperience) {
-      Alert.alert('오류', '회사, 직무, 경력 정보가 필요합니다.');
+      alert('회사, 직무, 경력 정보가 필요합니다.');
       return;
     }
 
@@ -160,37 +164,32 @@ export default function App() {
         difficultQuestionIds
       );
 
-      // 저장 후 선택지 제공
-      Alert.alert(
-        '저장 완료! 🎉',
-        difficultQuestionIds.length > 0
-          ? `면접 내용이 저장되었습니다.\n어려웠던 질문 ${difficultQuestionIds.length}개를 체크하셨네요!`
-          : '면접 내용이 저장되었습니다.',
-        [
-          {
-            text: '바로 복습하기',
-            onPress: () => {
-              setSelectedRecord(savedRecord);
-              setShowDifficultOnly(difficultQuestionIds.length > 0);
-              setCurrentStep('viewRecord');
-            },
-          },
-          {
-            text: '저장 목록 보기',
-            onPress: () => {
-              setCurrentStep('saved');
-            },
-          },
-          {
-            text: '새 면접 시작',
-            style: 'cancel',
-            onPress: handleReset,
-          },
-        ]
-      );
+      // 모달 표시
+      setLastSavedRecord(savedRecord);
+      setLastDifficultCount(difficultQuestionIds.length);
+      setShowSaveModal(true);
     } catch (error) {
-      Alert.alert('오류', '저장에 실패했습니다.');
+      alert('저장에 실패했습니다.');
     }
+  };
+
+  const handleViewSavedNow = () => {
+    if (lastSavedRecord) {
+      setShowSaveModal(false);
+      setSelectedRecord(lastSavedRecord);
+      setShowDifficultOnly(lastDifficultCount > 0);
+      setCurrentStep('viewRecord');
+    }
+  };
+
+  const handleViewSavedList = () => {
+    setShowSaveModal(false);
+    setCurrentStep('saved');
+  };
+
+  const handleStartNewInterview = () => {
+    setShowSaveModal(false);
+    handleReset();
   };
 
   const handleCloseReview = () => {
@@ -217,28 +216,22 @@ export default function App() {
   };
 
   const handleRetryInterview = (record: InterviewRecord) => {
-    Alert.alert(
-      '다시 연습하기',
-      `${record.company.name} ${record.position} 면접을\n다시 연습하시겠어요?`,
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '시작하기',
-          onPress: () => {
-            // 이전 설정으로 새 면접 시작
-            setSelectedCompany(record.company);
-            setSelectedPosition(record.position);
-            setSelectedExperience(record.experience);
-            setMessages([]);
-            setUploadedFile(null);
-            setUploadedFiles([]);
-            setSelectedRecord(null);
-            setShowDifficultOnly(false);
-            setCurrentStep('upload');
-          },
-        },
-      ]
+    const confirmed = window.confirm(
+      `${record.company.name} 면접을 다시 연습하시겠어요?`
     );
+
+    if (confirmed) {
+      // 이전 설정으로 새 면접 시작
+      setSelectedCompany(record.company);
+      setSelectedPosition(record.position);
+      setSelectedExperience(record.experience);
+      setMessages([]);
+      setUploadedFile(null);
+      setUploadedFiles([]);
+      setSelectedRecord(null);
+      setShowDifficultOnly(false);
+      setCurrentStep('upload');
+    }
   };
 
   return (
@@ -424,6 +417,14 @@ export default function App() {
           </View>
         )}
       </View>
+
+      <SaveSuccessModal
+        visible={showSaveModal}
+        difficultCount={lastDifficultCount}
+        onViewNow={handleViewSavedNow}
+        onViewList={handleViewSavedList}
+        onNewInterview={handleStartNewInterview}
+      />
     </SafeAreaView>
   );
 }

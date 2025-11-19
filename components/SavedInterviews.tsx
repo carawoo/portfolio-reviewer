@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { InterviewRecord, Position, Experience } from '../types';
 import { getInterviewRecords, deleteInterviewRecord, getDifficultQuestions } from '../services/storage';
@@ -31,21 +30,12 @@ export const SavedInterviews: React.FC<SavedInterviewsProps> = ({
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert(
-      '삭제 확인',
-      '이 면접 기록을 삭제하시겠습니까?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: () => {
-            deleteInterviewRecord(id);
-            loadRecords();
-          },
-        },
-      ]
-    );
+    const confirmed = window.confirm('이 면접 기록을 삭제하시겠습니까?');
+
+    if (confirmed) {
+      deleteInterviewRecord(id);
+      loadRecords();
+    }
   };
 
   const formatDate = (date: Date) => {
