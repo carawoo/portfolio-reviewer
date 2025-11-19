@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, Platform, ScrollView }
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { UploadedFile } from '../types';
+import * as pdfjsLib from 'pdfjs-dist';
 
 interface FileUploadProps {
   onFileSelect: (file: UploadedFile, allFiles?: UploadedFile[]) => void;
@@ -15,6 +16,11 @@ const isWeb = Platform.OS === 'web';
 console.log('FileUpload component loaded');
 console.log('Platform.OS:', Platform.OS);
 console.log('isWeb:', isWeb);
+
+// PDF.js worker 설정 (웹 환경에서만)
+if (isWeb && typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+}
 
 // 이미지를 리사이즈하고 압축
 const resizeAndCompressImage = (file: Blob): Promise<string> => {
@@ -96,10 +102,74 @@ const fileToBase64Web = (file: Blob): Promise<string> => {
   });
 };
 
+// PDF를 이미지 배열로 변환 (대용량 PDF 자동 압축)
+const convertPdfToImages = async (
+  file: Blob,
+  onProgress?: (current: number, total: number) => void
+): Promise<UploadedFile[]> => {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const numPages = pdf.numPages;
+    const uploadedFiles: UploadedFile[] = [];
+
+    console.log(`PDF 총 페이지: ${numPages}`);
+
+    // 각 페이지를 이미지로 변환
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      onProgress?.(pageNum, numPages);
+
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1.5 }); // 적절한 해상도
+
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({
+        canvasContext: context!,
+        viewport: viewport,
+      }).promise;
+
+      // Canvas를 Blob으로 변환
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas to Blob failed'));
+          },
+          'image/jpeg',
+          0.8
+        );
+      });
+
+      // 이미지 압축
+      const base64 = await resizeAndCompressImage(blob);
+
+      uploadedFiles.push({
+        uri: canvas.toDataURL('image/jpeg', 0.8),
+        name: `page-${pageNum}.jpg`,
+        type: 'image',
+        mimeType: 'image/jpeg',
+        base64: base64,
+      });
+    }
+
+    console.log(`PDF → ${uploadedFiles.length}개 이미지로 변환 완료`);
+    return uploadedFiles;
+  } catch (error) {
+    console.error('PDF 변환 오류:', error);
+    throw new Error('PDF를 이미지로 변환할 수 없습니다.');
+  }
+};
+
 export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<UploadedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState<string>('');
+  const [conversionProgress, setConversionProgress] = useState<{ current: number; total: number } | null>(null);
 
   const pickImageWeb = () => {
     console.log('pickImageWeb called');
@@ -172,21 +242,88 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
       const file = e.target.files?.[0];
       if (file) {
         const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+        const isPdf = file.type === 'application/pdf';
 
-        // PDF 용량 제한: 15MB (Vercel 및 OpenAI API 제한 고려)
+        // PDF 용량 제한: 15MB 초과 시 자동 이미지 변환 제안
         const MAX_PDF_SIZE = 15 * 1024 * 1024; // 15MB
-        if (file.size > MAX_PDF_SIZE) {
-          alert(
-            `PDF 파일이 너무 큽니다 (${sizeInMB}MB).\n\n` +
-            `최대 크기: 15MB\n\n` +
-            `💡 해결 방법:\n` +
-            `1. PDF를 이미지로 변환 후 여러 장 업로드\n` +
-            `2. PDF 압축 사이트 이용 (ilovepdf.com)\n` +
-            `3. 불필요한 페이지 제거`
+        if (isPdf && file.size > MAX_PDF_SIZE) {
+          const autoConvert = window.confirm(
+            `PDF 파일이 ${sizeInMB}MB로 용량 제한(15MB)을 초과합니다.\n\n` +
+            `✨ 자동으로 이미지로 변환하여 압축할까요?\n\n` +
+            `• PDF의 각 페이지를 이미지로 변환합니다\n` +
+            `• 자동으로 최적화하여 업로드합니다\n` +
+            `• 60MB 이상 대용량 PDF도 처리 가능합니다\n\n` +
+            `변환 시간: 약 ${Math.ceil(file.size / (1024 * 1024) / 10)}분 소요 예상`
           );
+
+          if (!autoConvert) {
+            alert(
+              `PDF 압축 사이트를 이용해주세요:\n` +
+              `• ilovepdf.com\n` +
+              `• smallpdf.com`
+            );
+            return;
+          }
+
+          // PDF를 이미지로 자동 변환
+          setIsProcessing(true);
+          setProcessingMessage('PDF를 이미지로 변환 중...');
+          setConversionProgress({ current: 0, total: 0 });
+
+          try {
+            const uploadedFiles = await convertPdfToImages(file, (current, total) => {
+              setConversionProgress({ current, total });
+              setProcessingMessage(`페이지 변환 중: ${current}/${total}`);
+            });
+
+            // 변환 완료 후 총 크기 확인
+            const totalSize = uploadedFiles.reduce((sum, f) => {
+              return sum + (f.base64 ? (f.base64.length * 0.75) / (1024 * 1024) : 0);
+            }, 0);
+
+            console.log(`총 변환 크기: ${totalSize.toFixed(2)}MB`);
+
+            if (totalSize > 4) {
+              alert(
+                `변환 후 총 크기가 ${totalSize.toFixed(2)}MB입니다.\n\n` +
+                `최대 크기 4MB를 초과하여 일부 페이지만 업로드합니다.`
+              );
+              // 4MB 이하가 될 때까지 페이지 제거
+              let currentSize = 0;
+              const limitedFiles: UploadedFile[] = [];
+              for (const file of uploadedFiles) {
+                const fileSize = file.base64 ? (file.base64.length * 0.75) / (1024 * 1024) : 0;
+                if (currentSize + fileSize <= 4) {
+                  limitedFiles.push(file);
+                  currentSize += fileSize;
+                } else {
+                  break;
+                }
+              }
+              setSelectedFile(limitedFiles[0]);
+              setSelectedFiles(limitedFiles);
+              onFileSelect(limitedFiles[0], limitedFiles);
+            } else {
+              setSelectedFile(uploadedFiles[0]);
+              setSelectedFiles(uploadedFiles);
+              onFileSelect(uploadedFiles[0], uploadedFiles);
+            }
+
+            setProcessingMessage(`완료! ${uploadedFiles.length}페이지 변환됨`);
+            setTimeout(() => {
+              setProcessingMessage('');
+              setConversionProgress(null);
+            }, 2000);
+          } catch (error: any) {
+            console.error('PDF 변환 오류:', error);
+            alert(`PDF 변환 실패: ${error.message}`);
+          } finally {
+            setIsProcessing(false);
+          }
           return;
         }
 
+        // 15MB 이하 PDF 또는 일반 이미지 처리
         // 대용량 파일 경고 (10MB 이상)
         if (file.size > 10 * 1024 * 1024) {
           const proceed = window.confirm(
@@ -198,12 +335,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
         }
 
         setIsProcessing(true);
+        setProcessingMessage('파일 처리 중...');
         try {
-          const isPdf = file.type === 'application/pdf';
-          const base64 = isPdf 
+          const base64 = isPdf
             ? await fileToBase64Web(file)
             : await resizeAndCompressImage(file);
-          
+
           const uploadedFile: UploadedFile = {
             uri: URL.createObjectURL(file),
             name: file.name,
@@ -218,6 +355,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
           alert('파일을 처리할 수 없습니다.');
         } finally {
           setIsProcessing(false);
+          setProcessingMessage('');
         }
       }
     };
@@ -292,8 +430,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
         <Text style={styles.title}>포트폴리오 업로드</Text>
         <Text style={styles.subtitle}>이미지 또는 PDF 파일을 업로드해주세요</Text>
         <Text style={styles.sizeLimit}>• 이미지: 여러 개 선택 가능 (자동 최적화)</Text>
-        <Text style={styles.sizeLimit}>• PDF: 최대 15MB</Text>
-        <Text style={styles.sizeTip}>⚠️ 대용량 PDF는 업로드/분석 시간이 오래 걸릴 수 있습니다</Text>
+        <Text style={styles.sizeLimit}>• PDF: 15MB 이하 직접 업로드</Text>
+        <Text style={styles.sizeLimit}>• 대용량 PDF (60MB+): 자동 이미지 변환 지원 ✨</Text>
+        <Text style={styles.sizeTip}>💡 15MB 초과 PDF는 자동으로 이미지로 변환하여 최적화합니다</Text>
       </View>
 
       <View style={styles.uploadArea}>
@@ -303,8 +442,25 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
               <Text style={styles.iconText}>📎</Text>
             </View>
             <Text style={styles.uploadText}>
-              {isProcessing ? '파일 처리 중...' : '파일을 선택해주세요 (여러 개 가능)'}
+              {isProcessing
+                ? (processingMessage || '파일 처리 중...')
+                : '파일을 선택해주세요 (여러 개 가능)'}
             </Text>
+            {conversionProgress && conversionProgress.total > 0 && (
+              <View style={styles.progressContainer}>
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${(conversionProgress.current / conversionProgress.total) * 100}%` }
+                    ]}
+                  />
+                </View>
+                <Text style={styles.progressText}>
+                  {conversionProgress.current} / {conversionProgress.total} 페이지
+                </Text>
+              </View>
+            )}
             <View style={styles.buttonGroup}>
               <TouchableOpacity 
                 style={[styles.uploadButton, isProcessing && styles.uploadButtonDisabled]} 
@@ -472,6 +628,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#007AFF',
     marginTop: 16,
+    fontWeight: '500',
+  },
+  progressContainer: {
+    width: '100%',
+    maxWidth: 300,
+    marginTop: 16,
+    gap: 8,
+  },
+  progressBar: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#007AFF',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 13,
+    color: '#666666',
+    textAlign: 'center',
     fontWeight: '500',
   },
   previewContainer: {
