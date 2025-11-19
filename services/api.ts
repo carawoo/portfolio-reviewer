@@ -65,7 +65,7 @@ export const analyzePortfolio = async (
         conversationHistory: request.conversationHistory,
       },
       {
-        timeout: 60000, // 60초 타임아웃
+        timeout: 180000, // 3분 타임아웃 (대용량 PDF 처리)
         headers: {
           'Content-Type': 'application/json',
         },

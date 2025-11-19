@@ -171,12 +171,30 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
       console.log('File input changed, files:', e.target.files);
       const file = e.target.files?.[0];
       if (file) {
-        // PDF 용량 제한 20MB로 증가
-        const MAX_PDF_SIZE = 20 * 1024 * 1024; // 20MB
+        const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+
+        // PDF 용량 제한: 15MB (Vercel 및 OpenAI API 제한 고려)
+        const MAX_PDF_SIZE = 15 * 1024 * 1024; // 15MB
         if (file.size > MAX_PDF_SIZE) {
-          const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
-          alert(`PDF 파일이 너무 큽니다 (${sizeInMB}MB).\n20MB 이하의 파일을 사용해주세요.`);
+          alert(
+            `PDF 파일이 너무 큽니다 (${sizeInMB}MB).\n\n` +
+            `최대 크기: 15MB\n\n` +
+            `💡 해결 방법:\n` +
+            `1. PDF를 이미지로 변환 후 여러 장 업로드\n` +
+            `2. PDF 압축 사이트 이용 (ilovepdf.com)\n` +
+            `3. 불필요한 페이지 제거`
+          );
           return;
+        }
+
+        // 대용량 파일 경고 (10MB 이상)
+        if (file.size > 10 * 1024 * 1024) {
+          const proceed = window.confirm(
+            `파일 크기: ${sizeInMB}MB\n\n` +
+            `업로드 및 분석에 시간이 오래 걸릴 수 있습니다.\n` +
+            `계속하시겠습니까?`
+          );
+          if (!proceed) return;
         }
 
         setIsProcessing(true);
@@ -274,8 +292,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
         <Text style={styles.title}>포트폴리오 업로드</Text>
         <Text style={styles.subtitle}>이미지 또는 PDF 파일을 업로드해주세요</Text>
         <Text style={styles.sizeLimit}>• 이미지: 여러 개 선택 가능 (자동 최적화)</Text>
-        <Text style={styles.sizeLimit}>• PDF: 최대 20MB</Text>
-        <Text style={styles.sizeTip}>💡 대용량 PDF도 업로드 가능! 처리 시간이 조금 걸릴 수 있어요</Text>
+        <Text style={styles.sizeLimit}>• PDF: 최대 15MB</Text>
+        <Text style={styles.sizeTip}>⚠️ 대용량 PDF는 업로드/분석 시간이 오래 걸릴 수 있습니다</Text>
       </View>
 
       <View style={styles.uploadArea}>
