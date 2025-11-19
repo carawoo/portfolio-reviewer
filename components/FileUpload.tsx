@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, Platform, ScrollView }
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { UploadedFile } from '../types';
-import * as pdfjsLib from 'pdfjs-dist';
 
 interface FileUploadProps {
   onFileSelect: (file: UploadedFile, allFiles?: UploadedFile[]) => void;
@@ -16,11 +15,6 @@ const isWeb = Platform.OS === 'web';
 console.log('FileUpload component loaded');
 console.log('Platform.OS:', Platform.OS);
 console.log('isWeb:', isWeb);
-
-// PDF.js worker 설정 (웹 환경에서만)
-if (isWeb && typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-}
 
 // 이미지를 리사이즈하고 압축
 const resizeAndCompressImage = (file: Blob): Promise<string> => {
@@ -108,6 +102,12 @@ const convertPdfToImages = async (
   onProgress?: (current: number, total: number) => void
 ): Promise<UploadedFile[]> => {
   try {
+    // 동적으로 pdfjs-dist import (웹 환경에서만)
+    const pdfjsLib = await import('pdfjs-dist');
+
+    // PDF.js worker 설정
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const numPages = pdf.numPages;
