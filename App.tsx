@@ -4,10 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 import { FileUpload } from './components/FileUpload';
 import { CompanySelector } from './components/CompanySelector';
 import { ChatInterface } from './components/ChatInterface';
-import { UploadedFile, Company, Message, Position, Experience } from './types';
+import { InterviewReview } from './components/InterviewReview';
+import { SavedInterviews } from './components/SavedInterviews';
+import { UploadedFile, Company, Message, Position, Experience, InterviewRecord } from './types';
 import { analyzePortfolio } from './services/api';
+import { saveInterviewRecord, getDifficultQuestions } from './services/storage';
 
-type Step = 'upload' | 'company' | 'chat';
+type Step = 'upload' | 'company' | 'chat' | 'review' | 'saved' | 'viewRecord';
 
 export default function App() {
   const [currentStep, setCurrentStep] = useState<Step>('upload');
@@ -18,6 +21,8 @@ export default function App() {
   const [selectedExperience, setSelectedExperience] = useState<Experience | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<InterviewRecord | null>(null);
+  const [showDifficultOnly, setShowDifficultOnly] = useState(false);
 
   const handleFileSelect = (file: UploadedFile, allFiles?: UploadedFile[]) => {
     setUploadedFile(file);
@@ -125,8 +130,66 @@ export default function App() {
   const handleReset = () => {
     setCurrentStep('upload');
     setUploadedFile(null);
+    setUploadedFiles([]);
     setSelectedCompany(null);
+    setSelectedPosition(null);
+    setSelectedExperience(null);
     setMessages([]);
+  };
+
+  const handleEndInterview = () => {
+    if (messages.length === 0) {
+      Alert.alert('알림', '면접 내용이 없습니다.');
+      return;
+    }
+    setCurrentStep('review');
+  };
+
+  const handleSaveReview = (difficultQuestionIds: string[]) => {
+    if (!selectedCompany || !selectedPosition || !selectedExperience) {
+      Alert.alert('오류', '회사, 직무, 경력 정보가 필요합니다.');
+      return;
+    }
+
+    try {
+      saveInterviewRecord(
+        selectedCompany,
+        selectedPosition,
+        selectedExperience,
+        messages,
+        difficultQuestionIds
+      );
+      Alert.alert(
+        '저장 완료',
+        '면접 내용이 저장되었습니다.\n어려웠던 질문은 나중에 다시 볼 수 있어요!',
+        [{ text: '확인', onPress: handleReset }]
+      );
+    } catch (error) {
+      Alert.alert('오류', '저장에 실패했습니다.');
+    }
+  };
+
+  const handleCloseReview = () => {
+    setCurrentStep('chat');
+  };
+
+  const handleViewSaved = () => {
+    setCurrentStep('saved');
+  };
+
+  const handleSelectRecord = (record: InterviewRecord) => {
+    setSelectedRecord(record);
+    setCurrentStep('viewRecord');
+  };
+
+  const handleCloseSaved = () => {
+    setCurrentStep('upload');
+  };
+
+  const handleCloseRecord = () => {
+    setSelectedRecord(null);
+    setShowDifficultOnly(false);
+    setCurrentStep('saved');
   };
 
   return (
@@ -139,11 +202,18 @@ export default function App() {
           <Text style={styles.headerTitle}>포트폴리오 리뷰어</Text>
           <Text style={styles.headerSubtitle}>AI 기반 맞춤형 검토</Text>
         </View>
-        {currentStep === 'chat' && (
-          <TouchableOpacity onPress={handleReset} style={styles.resetButton}>
-            <Text style={styles.resetButtonText}>↻</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.headerActions}>
+          {currentStep === 'upload' && (
+            <TouchableOpacity onPress={handleViewSaved} style={styles.savedButton}>
+              <Text style={styles.savedButtonText}>📋</Text>
+            </TouchableOpacity>
+          )}
+          {currentStep === 'chat' && (
+            <TouchableOpacity onPress={handleReset} style={styles.resetButton}>
+              <Text style={styles.resetButtonText}>↻</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Progress Steps */}
@@ -215,8 +285,86 @@ export default function App() {
           <ChatInterface
             messages={messages}
             onSendMessage={handleSendMessage}
+            onEndInterview={handleEndInterview}
             isLoading={isLoading}
           />
+        )}
+
+        {currentStep === 'review' && selectedCompany && selectedPosition && selectedExperience && (
+          <InterviewReview
+            messages={messages}
+            company={selectedCompany}
+            position={selectedPosition}
+            experience={selectedExperience}
+            onSave={handleSaveReview}
+            onClose={handleCloseReview}
+          />
+        )}
+
+        {currentStep === 'saved' && (
+          <SavedInterviews onClose={handleCloseSaved} onSelectRecord={handleSelectRecord} />
+        )}
+
+        {currentStep === 'viewRecord' && selectedRecord && (
+          <View style={styles.viewRecordContainer}>
+            <View style={styles.viewRecordHeader}>
+              <TouchableOpacity onPress={handleCloseRecord} style={styles.backButton}>
+                <Text style={styles.backButtonText}>← 목록</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterButton, showDifficultOnly && styles.filterButtonActive]}
+                onPress={() => setShowDifficultOnly(!showDifficultOnly)}
+              >
+                <Text style={[styles.filterButtonText, showDifficultOnly && styles.filterButtonTextActive]}>
+                  {showDifficultOnly ? '✓ 어려운 질문만' : '어려운 질문만'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.viewRecordContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.recordMetaInfo}>
+                <Text style={styles.recordCompany}>{selectedRecord.company.name}</Text>
+                <Text style={styles.recordDate}>
+                  {new Date(selectedRecord.createdAt).toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </Text>
+              </View>
+
+              {(showDifficultOnly
+                ? getDifficultQuestions(selectedRecord)
+                : selectedRecord.messages.filter(m => m.role === 'assistant')
+              ).map((msg, index) => {
+                const userResponse = selectedRecord.messages.find(
+                  (m, i) =>
+                    m.role === 'user' &&
+                    i > selectedRecord.messages.indexOf(msg)
+                );
+                const isDifficult = selectedRecord.difficultQuestions.includes(msg.id);
+
+                return (
+                  <View key={msg.id} style={styles.savedQuestionCard}>
+                    <View style={styles.savedQuestionHeader}>
+                      <Text style={styles.savedQuestionNumber}>Q{index + 1}</Text>
+                      {isDifficult && (
+                        <View style={styles.difficultBadge}>
+                          <Text style={styles.difficultBadgeText}>어려웠음</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.savedQuestionText}>{msg.content}</Text>
+                    {userResponse && (
+                      <View style={styles.savedAnswerBox}>
+                        <Text style={styles.savedAnswerLabel}>내 답변</Text>
+                        <Text style={styles.savedAnswerText}>{userResponse.content}</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -237,6 +385,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  savedButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savedButtonText: {
+    fontSize: 18,
   },
   headerTitle: {
     fontSize: 22,
@@ -344,5 +507,119 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 16,
     fontWeight: '600',
+  },
+  viewRecordContainer: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
+  },
+  viewRecordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+  },
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  filterButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  filterButtonActive: {
+    backgroundColor: '#FFF3E0',
+    borderColor: '#FF9800',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666666',
+  },
+  filterButtonTextActive: {
+    color: '#FF9800',
+  },
+  viewRecordContent: {
+    flex: 1,
+    padding: 24,
+  },
+  recordMetaInfo: {
+    marginBottom: 24,
+  },
+  recordCompany: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 8,
+  },
+  recordDate: {
+    fontSize: 14,
+    color: '#666666',
+  },
+  savedQuestionCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  savedQuestionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  savedQuestionNumber: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  difficultBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#FFF3E0',
+  },
+  difficultBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FF9800',
+  },
+  savedQuestionText: {
+    fontSize: 15,
+    color: '#000000',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  savedAnswerBox: {
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  savedAnswerLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666666',
+    marginBottom: 6,
+  },
+  savedAnswerText: {
+    fontSize: 14,
+    color: '#333333',
+    lineHeight: 20,
   },
 });

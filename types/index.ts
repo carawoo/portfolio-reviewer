@@ -4,6 +4,7 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  isDifficult?: boolean; // 어려웠던 질문 표시
 }
 
 // 파일 타입
@@ -46,4 +47,15 @@ export interface AnalysisResponse {
   message: string;
   suggestions?: string[];
   nextQuestion?: string;
+}
+
+// 면접 기록 타입
+export interface InterviewRecord {
+  id: string;
+  company: Company;
+  position: Position;
+  experience: Experience;
+  messages: Message[];
+  createdAt: Date;
+  difficultQuestions: string[]; // 어려웠던 질문 ID 리스트
 }

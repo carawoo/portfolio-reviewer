@@ -15,12 +15,14 @@ import { Message } from '../types';
 interface ChatInterfaceProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
+  onEndInterview?: () => void;
   isLoading?: boolean;
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   messages,
   onSendMessage,
+  onEndInterview,
   isLoading = false,
 }) => {
   const [inputText, setInputText] = useState('');
@@ -103,6 +105,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </View>
         )}
       </ScrollView>
+
+      {onEndInterview && messages.length > 0 && (
+        <View style={styles.endInterviewContainer}>
+          <TouchableOpacity style={styles.endInterviewButton} onPress={onEndInterview}>
+            <Text style={styles.endInterviewText}>✓ 면접 종료하고 복습하기</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.inputContainer}>
         <TextInput
@@ -217,6 +227,25 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginTop: 4,
     fontWeight: '500',
+  },
+  endInterviewContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  endInterviewButton: {
+    backgroundColor: '#0066FF',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  endInterviewText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
   inputContainer: {
     flexDirection: 'row',
