@@ -154,11 +154,15 @@ const convertPdfToImages = async (
     const numPages = pdf.numPages;
     const uploadedFiles: UploadedFile[] = [];
 
-    console.log(`PDF 총 페이지: ${numPages}`);
+    // 최대 15페이지로 제한 (Vercel 4.5MB body limit 회피)
+    const MAX_PAGES = 15;
+    const pagesToProcess = Math.min(numPages, MAX_PAGES);
+
+    console.log(`PDF 총 페이지: ${numPages}${numPages > MAX_PAGES ? ` (${MAX_PAGES}페이지만 처리)` : ''}`);
 
     // 각 페이지를 이미지로 변환
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      onProgress?.(pageNum, numPages);
+    for (let pageNum = 1; pageNum <= pagesToProcess; pageNum++) {
+      onProgress?.(pageNum, pagesToProcess);
 
       const page = await pdf.getPage(pageNum);
       const viewport = page.getViewport({ scale: 1.0 }); // 낮은 해상도 (413 에러 방지)
@@ -306,10 +310,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
           const autoConvert = window.confirm(
             `PDF 파일이 ${sizeInMB}MB로 용량 제한(15MB)을 초과합니다.\n\n` +
             `✨ 자동으로 이미지로 변환하여 압축할까요?\n\n` +
-            `• PDF의 각 페이지를 이미지로 변환합니다\n` +
+            `• PDF의 처음 15페이지를 이미지로 변환합니다\n` +
             `• 자동으로 최적화하여 업로드합니다\n` +
             `• 60MB 이상 대용량 PDF도 처리 가능합니다\n\n` +
-            `변환 시간: 약 ${Math.ceil(file.size / (1024 * 1024) / 10)}분 소요 예상`
+            `변환 시간: 약 1-2분 소요 예상`
           );
 
           if (!autoConvert) {
@@ -487,7 +491,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
         <Text style={styles.subtitle}>이미지 또는 PDF 파일을 업로드해주세요</Text>
         <Text style={styles.sizeLimit}>• 이미지: 최대 6개 선택 가능 (자동 강력 압축)</Text>
         <Text style={styles.sizeLimit}>• PDF: 15MB 이하 직접 업로드</Text>
-        <Text style={styles.sizeLimit}>• 대용량 PDF (60MB+): 자동 이미지 변환 지원 ✨</Text>
+        <Text style={styles.sizeLimit}>• 대용량 PDF (60MB+): 처음 15페이지만 자동 변환 ✨</Text>
         <Text style={styles.sizeTip}>💡 모든 이미지는 자동으로 400px 크기로 압축됩니다 (최대 2.5MB)</Text>
       </View>
 
