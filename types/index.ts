@@ -41,6 +41,7 @@ export interface AnalysisRequest {
   position: Position;
   experience: Experience;
   conversationHistory: Message[];
+  portfolioAnalysis?: string; // 포트폴리오 분석 결과 (첫 요청 후 저장)
 }
 
 // 분석 응답 타입
@@ -48,6 +49,7 @@ export interface AnalysisResponse {
   message: string;
   suggestions?: string[];
   nextQuestion?: string;
+  portfolioAnalysis?: string; // 포트폴리오 분석 결과 (클라이언트가 저장)
 }
 
 // 면접 기록 타입

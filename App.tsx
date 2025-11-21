@@ -31,6 +31,7 @@ export default function App() {
   const [lastDifficultCount, setLastDifficultCount] = useState(0);
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [consentAsked, setConsentAsked] = useState(false);
+  const [portfolioAnalysis, setPortfolioAnalysis] = useState<string | undefined>(undefined); // 포트폴리오 분석 결과 저장
 
   const handleFileSelect = (file: UploadedFile, allFiles?: UploadedFile[]) => {
     setUploadedFile(file);
@@ -68,12 +69,18 @@ export default function App() {
         position: selectedPosition,
         experience: selectedExperience,
         conversationHistory: [],
+        portfolioAnalysis: portfolioAnalysis, // 이전 분석 결과 포함
       });
 
       console.log('API response received:', response);
 
       if (!response || !response.message) {
         throw new Error('잘못된 API 응답입니다.');
+      }
+
+      // 포트폴리오 분석 결과 저장 (첫 요청에서만 반환됨)
+      if (response.portfolioAnalysis) {
+        setPortfolioAnalysis(response.portfolioAnalysis);
       }
 
       const aiMessage: Message = {
@@ -117,6 +124,7 @@ export default function App() {
         position: selectedPosition,
         experience: selectedExperience,
         conversationHistory: updatedMessages,
+        portfolioAnalysis: portfolioAnalysis, // 저장된 분석 결과 사용
       });
 
       const aiMessage: Message = {
@@ -144,6 +152,7 @@ export default function App() {
     setSelectedPosition(null);
     setSelectedExperience(null);
     setMessages([]);
+    setPortfolioAnalysis(undefined); // 분석 결과도 초기화
   };
 
   const handleEndInterview = () => {

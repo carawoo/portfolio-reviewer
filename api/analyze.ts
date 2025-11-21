@@ -39,6 +39,7 @@ interface RequestBody {
     role: 'user' | 'assistant';
     content: string;
   }>;
+  portfolioAnalysis?: string; // 첫 요청 후 포트폴리오 분석 결과 (이후 요청에서 재사용)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -189,92 +190,95 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '- 개발자: "이 부분에서 Context API 대신 Redux를 쓰신 이유가 뭔가요?", "이 컴포넌트 구조가 재사용성 측면에서 최선일까요?"\n' +
       '- 기획자: "이 기능의 우선순위를 어떻게 정하셨나요?", "사용자 리서치 결과가 이 결정에 어떻게 반영됐나요?"';
 
-    // 대화 히스토리 변환
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: systemPrompt,
-      },
-    ];
+    // 첫 요청 여부 확인
+    const isFirstRequest = body.conversationHistory.length === 0 && !body.portfolioAnalysis;
 
-    // 첫 메시지에 이미지/PDF 포함
-    if (body.conversationHistory.length === 0) {
-      // 초기 분석 요청
+    let portfolioAnalysis = body.portfolioAnalysis;
+
+    // 첫 요청인 경우: GPT-4o로 이미지 분석 → 포트폴리오 내용 추출
+    if (isFirstRequest) {
+      const analysisMessages: OpenAI.ChatCompletionMessageParam[] = [
+        {
+          role: 'system',
+          content: '당신은 포트폴리오 분석 전문가입니다. 제공된 이미지나 PDF를 자세히 분석하여 다음 내용을 요약해주세요:\n\n' +
+            '1. 프로젝트 목록과 각 프로젝트의 핵심 내용\n' +
+            '2. 사용된 기술 스택과 도구\n' +
+            '3. 디자인 스타일과 UI/UX 특징\n' +
+            '4. 성과나 결과물 (수치, 지표 등)\n' +
+            '5. 특이사항이나 인상적인 부분\n\n' +
+            '간결하지만 구체적으로 작성하세요. 면접관이 이 내용을 보고 질문할 수 있도록 충분한 정보를 포함하세요.',
+        },
+      ];
+
       if (body.file.type === 'image') {
         const hasMultipleFiles = body.files && body.files.length > 1;
 
         if (hasMultipleFiles) {
-          // 여러 이미지가 있는 경우
-          const content: any[] = [
-            {
-              type: 'text',
-              text: body.company.name + ' 면접관입니다. 포트폴리오를 확인했습니다.\n\n' +
-                '친근하게 인사로 시작해주세요:\n' +
-                '"안녕하세요 :) 반갑습니다. 편안하게 커피챗 한다고 생각하시고 임해주시면 됩니다 ㅎㅎ"\n\n' +
-                '그 다음 포트폴리오에서 인상 깊었던 부분을 간단히 언급하고, 자연스럽게 1-2개의 질문으로 이어가주세요.',
-            },
-          ];
-
-          // 모든 이미지를 content에 추가
+          const content: any[] = [{ type: 'text', text: '다음 포트폴리오 이미지들을 분석해주세요:' }];
           body.files!.forEach(file => {
             content.push({
               type: 'image_url',
-              image_url: {
-                url: `data:${file.mimeType};base64,${file.base64}`,
-              },
+              image_url: { url: `data:${file.mimeType};base64,${file.base64}` },
             });
           });
-
-          messages.push({
-            role: 'user',
-            content,
-          });
+          analysisMessages.push({ role: 'user', content });
         } else {
-          // 단일 이미지
-          messages.push({
+          analysisMessages.push({
             role: 'user',
             content: [
-              {
-                type: 'text',
-                text: `${body.company.name} 면접관입니다. 포트폴리오를 확인했습니다.
-
-친근하게 인사로 시작해주세요:
-"안녕하세요 :) 반갑습니다. 편안하게 커피챗 한다고 생각하시고 임해주시면 됩니다 ㅎㅎ"
-
-그 다음 포트폴리오에서 인상 깊었던 부분을 간단히 언급하고, 자연스럽게 1-2개의 질문으로 이어가주세요.`,
-              },
+              { type: 'text', text: '다음 포트폴리오를 분석해주세요:' },
               {
                 type: 'image_url',
-                image_url: {
-                  url: `data:${body.file.mimeType};base64,${body.file.base64}`,
-                },
+                image_url: { url: `data:${body.file.mimeType};base64,${body.file.base64}` },
               },
             ],
           });
         }
       } else {
-        // PDF의 경우 - PDF 자체를 Vision API에 전달 (gpt-4o는 PDF 지원)
-        messages.push({
+        // PDF
+        analysisMessages.push({
           role: 'user',
           content: [
-            {
-              type: 'text',
-              text: `${body.company.name} 면접관입니다. PDF 포트폴리오를 확인했습니다.
-
-친근하게 인사로 시작해주세요:
-"안녕하세요 :) 반갑습니다. 편안하게 커피챗 한다고 생각하시고 임해주시면 됩니다 ㅎㅎ"
-
-그 다음 PDF에서 확인한 내용을 바탕으로 구체적인 질문을 1-2개 해주세요.`,
-            },
+            { type: 'text', text: '다음 PDF 포트폴리오를 분석해주세요:' },
             {
               type: 'image_url',
-              image_url: {
-                url: `data:${body.file.mimeType};base64,${body.file.base64}`,
-              },
+              image_url: { url: `data:${body.file.mimeType};base64,${body.file.base64}` },
             },
           ],
         });
       }
+
+      // GPT-4o로 포트폴리오 분석
+      const analysisCompletion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: analysisMessages,
+        max_tokens: 1500,
+        temperature: 0.3,
+      });
+
+      portfolioAnalysis = analysisCompletion.choices[0]?.message?.content || '';
+    }
+
+    // 포트폴리오 분석 결과를 시스템 프롬프트에 추가
+    const enhancedSystemPrompt = systemPrompt + '\n\n**포트폴리오 분석 결과:**\n' + portfolioAnalysis;
+
+    // 면접 질문 생성용 메시지
+    const messages: OpenAI.ChatCompletionMessageParam[] = [
+      {
+        role: 'system',
+        content: enhancedSystemPrompt,
+      },
+    ];
+
+    if (isFirstRequest) {
+      // 첫 질문 생성
+      messages.push({
+        role: 'user',
+        content: body.company.name + ' 면접관입니다. 포트폴리오를 확인했습니다.\n\n' +
+          '친근하게 인사로 시작해주세요:\n' +
+          '"안녕하세요 :) 반갑습니다. 편안하게 커피챗 한다고 생각하시고 임해주시면 됩니다 ㅎㅎ"\n\n' +
+          '그 다음 포트폴리오에서 인상 깊었던 부분을 구체적으로 언급하고, 자연스럽게 1-2개의 질문으로 이어가주세요.',
+      });
     } else {
       // 대화 히스토리 추가
       body.conversationHistory.forEach((msg) => {
@@ -285,9 +289,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // OpenAI API 호출
+    // GPT-4o-mini로 면접 질문 생성 (첫 요청 이후는 이미지 없이 텍스트만 사용)
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: isFirstRequest ? 'gpt-4o-mini' : 'gpt-4o-mini', // 첫 요청 이후는 모두 4o-mini
       messages,
       max_tokens: 1000,
       temperature: 0.7,
@@ -312,6 +316,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       message: assistantMessage,
+      portfolioAnalysis: portfolioAnalysis, // 클라이언트가 다음 요청에 포함할 수 있도록
     });
   } catch (error: any) {
     console.error('Error in analyze API:', error);
