@@ -1,40 +1,17 @@
 import { collection, addDoc, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { db } from './firebase';
 import { InterviewRecord, UploadedFile, Company, Position, Experience, Message } from '../types';
 
 /**
- * 사용자가 동의한 경우에만 클라우드에 면접 기록 저장
+ * 사용자가 동의한 경우에만 클라우드에 면접 기록 저장 (텍스트만)
+ * 파일은 로컬에만 저장되며 클라우드에 업로드하지 않음
  */
 export const saveInterviewToCloud = async (
   record: InterviewRecord,
   files?: UploadedFile[]
 ): Promise<string> => {
   try {
-    // 파일 업로드 (있는 경우)
-    let fileUrls: string[] = [];
-    if (files && files.length > 0) {
-      fileUrls = await Promise.all(
-        files.map(async (file) => {
-          const fileRef = ref(storage, `portfolios/${Date.now()}_${file.name}`);
-
-          // base64를 Blob으로 변환
-          const base64Data = file.base64 || '';
-          const byteCharacters = atob(base64Data.split(',')[1] || base64Data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: file.mimeType });
-
-          await uploadBytes(fileRef, blob);
-          return await getDownloadURL(fileRef);
-        })
-      );
-    }
-
-    // Firestore에 면접 기록 저장
+    // Firestore에 면접 기록 저장 (파일 제외)
     const docRef = await addDoc(collection(db, 'interviews'), {
       company: {
         name: record.company.name,
@@ -49,7 +26,7 @@ export const saveInterviewToCloud = async (
         timestamp: Timestamp.fromDate(m.timestamp),
       })),
       difficultQuestions: record.difficultQuestions,
-      fileUrls,
+      fileCount: files ? files.length : 0, // 파일 개수만 저장
       createdAt: Timestamp.fromDate(record.createdAt),
       userConsent: true, // 사용자가 동의했음을 명시
     });

@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 포트폴리오 파일 업로드
+    match /portfolios/{fileName} {
+      // 모든 사용자가 업로드 가능
+      allow create: if true;
+
+      // 파일 크기 제한 (50MB)
+      allow create: if request.resource.size < 50 * 1024 * 1024;
+
+      // 읽기는 제한 (추후 인증 추가 시 수정)
+      allow read: if false;
+
+      // 수정/삭제는 불가
+      allow update, delete: if false;
+    }
+  }
+}

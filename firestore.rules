@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 면접 기록 컬렉션
+    match /interviews/{interview} {
+      // 모든 사용자가 자신의 면접 기록을 생성할 수 있음 (익명)
+      allow create: if true;
+
+      // 읽기는 제한 (추후 인증 추가 시 수정)
+      allow read: if false;
+
+      // 수정/삭제는 불가
+      allow update, delete: if false;
+    }
+  }
+}

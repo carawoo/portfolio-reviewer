@@ -40,9 +40,9 @@ export const ConsentModal: React.FC<ConsentModalProps> = ({
               <Text style={styles.text}>
                 • 선택한 회사 정보 (회사명, 산업 분야)
                 {'\n'}• 직무 및 경력 정보
-                {'\n'}• 면접 대화 내용
-                {'\n'}• 업로드한 포트폴리오 파일
+                {'\n'}• 면접 대화 내용 (텍스트만)
                 {'\n'}• 어려웠던 질문 표시
+                {'\n'}• 업로드한 파일 개수 (파일 자체는 저장 안 함)
               </Text>
             </View>
 

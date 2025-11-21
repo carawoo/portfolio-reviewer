@@ -1,6 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { Platform } from 'react-native';
 
@@ -17,7 +16,6 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
-const storage = getStorage(app);
 
 // Analytics (웹에서만)
 let analytics = null;
@@ -29,4 +27,4 @@ if (Platform.OS === 'web') {
   });
 }
 
-export { app, db, storage, analytics };
+export { app, db, analytics };
