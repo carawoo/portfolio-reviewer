@@ -253,15 +253,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
       } else {
-        // PDF의 경우 텍스트로만 처리 (GPT-4 Vision은 PDF를 직접 읽지 못함)
+        // PDF의 경우 - PDF 자체를 Vision API에 전달 (gpt-4o는 PDF 지원)
         messages.push({
           role: 'user',
-          content: `${body.company.name} 면접관입니다. PDF 포트폴리오를 확인했습니다.
+          content: [
+            {
+              type: 'text',
+              text: `${body.company.name} 면접관입니다. PDF 포트폴리오를 확인했습니다.
 
 친근하게 인사로 시작해주세요:
 "안녕하세요 :) 반갑습니다. 편안하게 커피챗 한다고 생각하시고 임해주시면 됩니다 ㅎㅎ"
 
-그 다음 자연스럽게 1-2개의 질문으로 이어가주세요.`,
+그 다음 PDF에서 확인한 내용을 바탕으로 구체적인 질문을 1-2개 해주세요.`,
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${body.file.mimeType};base64,${body.file.base64}`,
+              },
+            },
+          ],
         });
       }
     } else {
