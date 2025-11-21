@@ -24,6 +24,7 @@ export interface Company {
   interviewFocus: string[];
   portfolioTips: string[];
   commonQuestions: string[];
+  jobPosting?: string; // 채용 공고 내용 (선택)
 }
 
 // 직무 타입

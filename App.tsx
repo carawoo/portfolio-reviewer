@@ -10,6 +10,7 @@ import { SaveSuccessModal } from './components/SaveSuccessModal';
 import { UploadedFile, Company, Message, Position, Experience, InterviewRecord } from './types';
 import { analyzePortfolio } from './services/api';
 import { saveInterviewRecord, getDifficultQuestions } from './services/storage';
+import { getErrorMessage, logError } from './utils/errorHandler';
 
 type Step = 'upload' | 'company' | 'chat' | 'review' | 'saved' | 'viewRecord';
 
@@ -82,8 +83,8 @@ export default function App() {
       console.log('Setting messages:', [aiMessage]);
       setMessages([aiMessage]);
     } catch (error: any) {
-      console.error('Error starting analysis:', error);
-      const errorMsg = error.response?.data?.error || error.message || '분석을 시작할 수 없습니다.';
+      logError('handleStartAnalysis', error);
+      const errorMsg = getErrorMessage(error);
       alert(`오류: ${errorMsg}`);
       setCurrentStep('company');
     } finally {
@@ -124,8 +125,9 @@ export default function App() {
 
       setMessages([...updatedMessages, aiMessage]);
     } catch (error: any) {
-      alert(`오류: ${error.message || '메시지를 전송할 수 없습니다.'}`);
-      console.error(error);
+      logError('handleSendMessage', error);
+      const errorMsg = getErrorMessage(error);
+      alert(`오류: ${errorMsg}`);
     } finally {
       setIsLoading(false);
     }

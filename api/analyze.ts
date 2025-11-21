@@ -30,6 +30,7 @@ interface RequestBody {
     interviewFocus: string[];
     portfolioTips: string[];
     commonQuestions: string[];
+    jobPosting?: string;
   };
   position: Position;
   experience: Experience;
@@ -144,6 +145,11 @@ ${experienceLevels[body.experience]}
 - 산업: ${body.company.industry}
 - 면접 중점사항: ${body.company.interviewFocus.join(', ')}
 
+${body.company.jobPosting ? `**채용 공고 내용:**
+${body.company.jobPosting}
+
+위 채용 공고의 지원 자격, 우대 사항, 주요 업무를 고려하여 질문하세요.
+` : ''}
 **검토 가이드라인:**
 ${body.company.portfolioTips.map((tip, i) => `${i + 1}. ${tip}`).join('\n')}
 

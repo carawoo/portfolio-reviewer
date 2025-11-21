@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { AnalysisRequest, AnalysisResponse, Message, UploadedFile } from '../types';
 import { Platform } from 'react-native';
+import { getErrorMessage } from '../utils/errorHandler';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '/api';
 
@@ -74,11 +75,8 @@ export const analyzePortfolio = async (
 
     return response.data;
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const message = error.response?.data?.error || error.message;
-      throw new Error(`분석 요청 실패: ${message}`);
-    }
-    throw error;
+    const errorMsg = getErrorMessage(error);
+    throw new Error(`분석 요청 실패: ${errorMsg}`);
   }
 };
 
@@ -111,10 +109,38 @@ export const startConversation = async (
 
     return response.data;
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const message = error.response?.data?.error || error.message;
-      throw new Error(`대화 시작 실패: ${message}`);
-    }
-    throw error;
+    const errorMsg = getErrorMessage(error);
+    throw new Error(`대화 시작 실패: ${errorMsg}`);
+  }
+};
+
+/**
+ * 회사 정보 검색 (AI 기반)
+ */
+export const searchCompanyInfo = async (
+  companyName: string,
+  position?: string,
+  jobPosting?: string
+): Promise<{ company: any }> => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/search-company`,
+      {
+        companyName,
+        position,
+        jobPosting,
+      },
+      {
+        timeout: 30000,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    const errorMsg = getErrorMessage(error);
+    throw new Error(`회사 정보 검색 실패: ${errorMsg}`);
   }
 };

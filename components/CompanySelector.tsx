@@ -6,9 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Company, Position, Experience } from '../types';
 import { companies } from '../data/companies';
+import { searchCompanyInfo } from '../services/api';
 
 interface CompanySelectorProps {
   onCompanySelect: (company: Company) => void;
@@ -30,6 +32,10 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
   const [searchText, setSearchText] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customCompanyName, setCustomCompanyName] = useState('');
+  const [showCustomPositionInput, setShowCustomPositionInput] = useState(false);
+  const [customPositionName, setCustomPositionName] = useState('');
+  const [isSearchingCompany, setIsSearchingCompany] = useState(false);
+  const [jobPostingContent, setJobPostingContent] = useState('');
 
   const scrollViewRef = useRef<ScrollView>(null);
   const experienceSectionRef = useRef<View>(null);
@@ -85,11 +91,56 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
     company.name.toLowerCase().includes(searchText.toLowerCase())
   );
 
-  const handleCustomCompany = () => {
-    if (customCompanyName.trim()) {
+  const handlePositionSelect = (position: Position) => {
+    if (position === 'other') {
+      setShowCustomPositionInput(true);
+    } else {
+      setShowCustomPositionInput(false);
+      onPositionSelect(position);
+    }
+  };
+
+  const handleCustomPosition = () => {
+    if (customPositionName.trim()) {
+      // "기타" 직무로 선택하되, 실제로는 사용자가 입력한 이름을 사용
+      onPositionSelect('other' as Position);
+      setShowCustomPositionInput(false);
+    }
+  };
+
+  const handleCustomCompany = async () => {
+    if (!customCompanyName.trim()) return;
+
+    setIsSearchingCompany(true);
+
+    try {
+      // AI를 통해 회사 정보 검색
+      const positionName = selectedPosition ?
+        positions.find(p => p.id === selectedPosition)?.name || customPositionName :
+        '';
+
+      const result = await searchCompanyInfo(
+        customCompanyName.trim(),
+        positionName,
+        jobPostingContent.trim() || undefined
+      );
+
+      // 공고 내용이 있으면 추가
+      if (jobPostingContent.trim()) {
+        result.company.jobPosting = jobPostingContent.trim();
+      }
+
+      onCompanySelect(result.company);
+      setShowCustomInput(false);
+      setCustomCompanyName('');
+      setJobPostingContent('');
+    } catch (error: any) {
+      console.error('회사 정보 검색 실패:', error);
+
+      // 실패 시 기본 정보로 생성
       const customCompany: Company = {
         id: 'custom',
-        name: customCompanyName,
+        name: customCompanyName.trim(),
         industry: '기타',
         interviewFocus: ['전문성', '협업 능력', '문제 해결 능력'],
         portfolioTips: [
@@ -103,9 +154,19 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
           '팀에서 어떤 역할을 맡았나요?',
         ],
       };
+
+      if (jobPostingContent.trim()) {
+        customCompany.jobPosting = jobPostingContent.trim();
+      }
+
       onCompanySelect(customCompany);
       setShowCustomInput(false);
       setCustomCompanyName('');
+      setJobPostingContent('');
+
+      alert('회사 정보 검색에 실패하여 기본 정보로 설정되었습니다.');
+    } finally {
+      setIsSearchingCompany(false);
     }
   };
 
@@ -125,25 +186,81 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. 직무</Text>
           <View style={styles.optionGrid}>
-            {positions.map((position) => (
-              <TouchableOpacity
-                key={position.id}
-                style={[
-                  styles.optionCard,
-                  selectedPosition === position.id && styles.selectedOption,
-                ]}
-                onPress={() => onPositionSelect(position.id)}
-              >
-                <Text style={[
-                  styles.optionName,
-                  selectedPosition === position.id && styles.selectedOptionText
-                ]}>
-                  {position.name}
-                </Text>
-                <Text style={styles.optionDesc}>{position.desc}</Text>
-              </TouchableOpacity>
-            ))}
+            {positions.map((position) => {
+              // "기타"가 선택되고 이름이 입력된 경우, "기타" 버튼 숨김
+              if (position.id === 'other' && selectedPosition === 'other' && customPositionName && !showCustomPositionInput) {
+                return null;
+              }
+
+              return (
+                <TouchableOpacity
+                  key={position.id}
+                  style={[
+                    styles.optionCard,
+                    selectedPosition === position.id && !customPositionName && styles.selectedOption,
+                  ]}
+                  onPress={() => handlePositionSelect(position.id)}
+                >
+                  <Text style={[
+                    styles.optionName,
+                    selectedPosition === position.id && !customPositionName && styles.selectedOptionText
+                  ]}>
+                    {position.name}
+                  </Text>
+                  <Text style={styles.optionDesc}>{position.desc}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
+
+          {/* 직무 직접 입력 - 선택된 상태 */}
+          {selectedPosition === 'other' && customPositionName && !showCustomPositionInput && (
+            <TouchableOpacity
+              style={[styles.optionCard, styles.selectedOption, styles.customPositionCard]}
+              onPress={() => setShowCustomPositionInput(true)}
+            >
+              <Text style={[styles.optionName, styles.selectedOptionText]}>
+                {customPositionName}
+              </Text>
+              <Text style={styles.optionDesc}>클릭하여 수정</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* 직무 직접 입력 */}
+          {showCustomPositionInput && (
+            <View style={styles.customInputContainer}>
+              <TextInput
+                style={styles.customInput}
+                placeholder="직무명을 입력하세요 (예: 데이터 분석가, 영상 편집자)"
+                value={customPositionName}
+                onChangeText={setCustomPositionName}
+                placeholderTextColor="#999999"
+                autoFocus
+                onSubmitEditing={handleCustomPosition}
+              />
+              <View style={styles.customButtonRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.customConfirmButton,
+                    !customPositionName.trim() && styles.disabledButton
+                  ]}
+                  onPress={handleCustomPosition}
+                  disabled={!customPositionName.trim()}
+                >
+                  <Text style={styles.customConfirmText}>확인</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.customCancelButton}
+                  onPress={() => {
+                    setShowCustomPositionInput(false);
+                    setCustomPositionName('');
+                  }}
+                >
+                  <Text style={styles.customCancelText}>취소</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* 경력 선택 */}
@@ -216,15 +333,46 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
           </TouchableOpacity>
         ))}
 
-        {!showCustomInput ? (
+        {/* 커스텀 회사가 선택된 경우 */}
+        {selectedCompany?.id === 'custom' && !showCustomInput && (
+          <TouchableOpacity
+            style={[styles.companyCard, styles.selectedCard]}
+            onPress={() => {
+              setCustomCompanyName(selectedCompany.name);
+              setShowCustomInput(true);
+            }}
+          >
+            <View style={styles.cardContent}>
+              <Text style={styles.companyName}>{selectedCompany.name}</Text>
+              <Text style={styles.companyIndustry}>기타 (클릭하여 수정)</Text>
+            </View>
+            <View style={styles.focusContainer}>
+              {selectedCompany.interviewFocus.slice(0, 3).map((focus, index) => (
+                <View key={index} style={styles.focusTag}>
+                  <Text style={styles.focusText}>{focus}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.checkmark}>
+              <Text style={styles.checkmarkText}>✓</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {!showCustomInput && selectedCompany?.id !== 'custom' && (
           <TouchableOpacity
             style={styles.customButton}
             onPress={() => setShowCustomInput(true)}
           >
             <Text style={styles.customButtonText}>+ 다른 회사 추가</Text>
           </TouchableOpacity>
-        ) : (
+        )}
+
+        {showCustomInput && (
           <View style={styles.customInputContainer}>
+            <View style={styles.labelRow}>
+              <Text style={styles.inputLabel}>회사명 *</Text>
+            </View>
             <TextInput
               style={styles.customInput}
               placeholder="회사명을 입력하세요"
@@ -233,19 +381,50 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
               placeholderTextColor="#999999"
               autoFocus
             />
+
+            <View style={styles.labelRow}>
+              <Text style={styles.inputLabel}>채용 공고 내용 (선택)</Text>
+              <Text style={styles.inputHint}> - 공고 내용을 복사해서 붙여넣으세요</Text>
+            </View>
+            <TextInput
+              style={styles.multilineInput}
+              placeholder="채용 공고 내용을 여기에 붙여넣으세요&#10;&#10;• 지원 자격&#10;• 우대 사항&#10;• 주요 업무&#10;• 회사 소개 등"
+              value={jobPostingContent}
+              onChangeText={setJobPostingContent}
+              placeholderTextColor="#999999"
+              multiline
+              numberOfLines={8}
+              textAlignVertical="top"
+            />
+
+            {isSearchingCompany && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#000000" />
+                <Text style={styles.loadingText}>AI가 회사 정보를 분석 중...</Text>
+              </View>
+            )}
+
             <View style={styles.customButtonRow}>
               <TouchableOpacity
-                style={styles.customConfirmButton}
+                style={[
+                  styles.customConfirmButton,
+                  (!customCompanyName.trim() || isSearchingCompany) && styles.disabledButton
+                ]}
                 onPress={handleCustomCompany}
+                disabled={!customCompanyName.trim() || isSearchingCompany}
               >
-                <Text style={styles.customConfirmText}>추가</Text>
+                <Text style={styles.customConfirmText}>
+                  {isSearchingCompany ? '분석 중...' : '추가'}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.customCancelButton}
                 onPress={() => {
                   setShowCustomInput(false);
                   setCustomCompanyName('');
+                  setJobPostingContent('');
                 }}
+                disabled={isSearchingCompany}
               >
                 <Text style={styles.customCancelText}>취소</Text>
               </TouchableOpacity>
@@ -398,6 +577,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  disabledButton: {
+    backgroundColor: '#CCCCCC',
+    opacity: 0.6,
+  },
   customCancelButton: {
     flex: 1,
     backgroundColor: '#F5F5F5',
@@ -449,6 +632,46 @@ const styles = StyleSheet.create({
   },
   optionDesc: {
     fontSize: 13,
+    color: '#666666',
+  },
+  customPositionCard: {
+    minWidth: '100%',
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  inputHint: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#666666',
+  },
+  multilineInput: {
+    backgroundColor: '#F5F5F5',
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 14,
+    minHeight: 120,
+    marginBottom: 16,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    marginBottom: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+  },
+  loadingText: {
+    fontSize: 14,
     color: '#666666',
   },
 });
