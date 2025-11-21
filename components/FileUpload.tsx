@@ -489,10 +489,94 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
       <View style={styles.header}>
         <Text style={styles.title}>포트폴리오 업로드</Text>
         <Text style={styles.subtitle}>이미지 또는 PDF 파일을 업로드해주세요</Text>
+
+        {/* 개인정보 보호 안내 */}
+        <View style={styles.privacyNotice}>
+          <View style={styles.privacyHeader}>
+            <Text style={styles.privacyIcon}>🔒</Text>
+            <Text style={styles.privacyTitle}>개인정보 보호</Text>
+          </View>
+          <View style={styles.privacyContent}>
+            <Text style={styles.privacyText}>
+              • 업로드된 파일은 <Text style={styles.privacyBold}>면접 리뷰 목적으로만</Text> 사용됩니다
+            </Text>
+            <Text style={styles.privacyText}>
+              • 모든 데이터는 <Text style={styles.privacyBold}>로컬에만 저장</Text>되며 서버에 저장되지 않습니다
+            </Text>
+            <Text style={styles.privacyText}>
+              • 서비스 운영자는 <Text style={styles.privacyBold}>절대 열람할 수 없습니다</Text>
+            </Text>
+            <Text style={styles.privacyText}>
+              • 대화 종료 시 OpenAI 서버에서도 자동으로 삭제됩니다
+            </Text>
+          </View>
+        </View>
+
         <Text style={styles.sizeLimit}>• 이미지: 최대 6개 선택 가능 (자동 강력 압축)</Text>
         <Text style={styles.sizeLimit}>• PDF: 15MB 이하 직접 업로드</Text>
         <Text style={styles.sizeLimit}>• 대용량 PDF (60MB+): 처음 15페이지만 자동 변환 ✨</Text>
         <Text style={styles.sizeTip}>💡 모든 이미지는 자동으로 400px 크기로 압축됩니다 (최대 2.5MB)</Text>
+      </View>
+
+      {/* 예시 질문 섹션 */}
+      <View style={styles.exampleSection}>
+        <View style={styles.exampleHeader}>
+          <Text style={styles.exampleIcon}>💬</Text>
+          <Text style={styles.exampleTitle}>어떤 질문을 받게 되나요?</Text>
+        </View>
+
+        <Text style={styles.exampleSubtitle}>직무와 경력에 따라 실제 면접처럼 맞춤형 질문을 받습니다</Text>
+
+        <View style={styles.exampleCards}>
+          <View style={styles.exampleCard}>
+            <Text style={styles.exampleCardBadge}>디자이너</Text>
+            <Text style={styles.exampleCardText}>
+              "이 인터페이스에서 파란색 그라디언트를 선택하신 이유가 있나요?"
+            </Text>
+            <Text style={styles.exampleCardText}>
+              "타이포그래피 위계가 명확하지 않은 것 같은데 의도하신 건가요?"
+            </Text>
+          </View>
+
+          <View style={styles.exampleCard}>
+            <Text style={styles.exampleCardBadge}>개발자</Text>
+            <Text style={styles.exampleCardText}>
+              "Context API 대신 Redux를 선택하신 구체적인 이유가 뭔가요?"
+            </Text>
+            <Text style={styles.exampleCardText}>
+              "이 컴포넌트 구조가 재사용성 측면에서 최선이었을까요?"
+            </Text>
+          </View>
+
+          <View style={styles.exampleCard}>
+            <Text style={styles.exampleCardBadge}>기획자</Text>
+            <Text style={styles.exampleCardText}>
+              "이 기능의 우선순위를 어떤 기준으로 정하셨나요?"
+            </Text>
+            <Text style={styles.exampleCardText}>
+              "사용자 리서치 데이터가 실제로 어떻게 반영되었나요?"
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.exampleFeatures}>
+          <View style={styles.exampleFeature}>
+            <Text style={styles.exampleFeatureIcon}>✅</Text>
+            <Text style={styles.exampleFeatureText}>포트폴리오의 구체적인 요소를 직접 언급</Text>
+          </View>
+          <View style={styles.exampleFeature}>
+            <Text style={styles.exampleFeatureIcon}>✅</Text>
+            <Text style={styles.exampleFeatureText}>압박 면접 포함, 실전처럼 진행</Text>
+          </View>
+          <View style={styles.exampleFeature}>
+            <Text style={styles.exampleFeatureIcon}>✅</Text>
+            <Text style={styles.exampleFeatureText}>답변 맥락을 추적하며 심화 질문</Text>
+          </View>
+          <View style={styles.exampleFeature}>
+            <Text style={styles.exampleFeatureIcon}>✅</Text>
+            <Text style={styles.exampleFeatureText}>회사별 채용 기준에 맞춘 질문</Text>
+          </View>
+        </View>
       </View>
 
       <View style={styles.uploadArea}>
@@ -636,6 +720,112 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginTop: 8,
     lineHeight: 18,
+  },
+  privacyNotice: {
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
+    borderColor: '#0EA5E9',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  privacyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  privacyIcon: {
+    fontSize: 20,
+  },
+  privacyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  privacyContent: {
+    gap: 8,
+  },
+  privacyText: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 20,
+  },
+  privacyBold: {
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  exampleSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    marginTop: 24,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  exampleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  exampleIcon: {
+    fontSize: 24,
+  },
+  exampleTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  exampleSubtitle: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  exampleCards: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  exampleCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    gap: 10,
+  },
+  exampleCardBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0066FF',
+    marginBottom: 4,
+  },
+  exampleCardText: {
+    fontSize: 14,
+    color: '#333333',
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
+  exampleFeatures: {
+    gap: 12,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  exampleFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  exampleFeatureIcon: {
+    fontSize: 16,
+  },
+  exampleFeatureText: {
+    fontSize: 14,
+    color: '#333333',
+    flex: 1,
+    lineHeight: 20,
   },
   uploadArea: {
     backgroundColor: '#FFFFFF',
