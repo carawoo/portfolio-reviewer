@@ -1,18 +1,46 @@
-import { InterviewRecord, Message, Company, Position, Experience } from '../types';
+import { InterviewRecord, Message, Company, Position, Experience, UploadedFile } from '../types';
 import { Platform } from 'react-native';
+import { saveInterviewToCloud, loadInterviewsFromCloud } from './cloudBackup';
 
 const STORAGE_KEY = 'interview_records';
+const CONSENT_KEY = 'cloud_backup_consent';
 
 /**
- * 면접 기록 저장
+ * 클라우드 백업 동의 여부 확인
  */
-export const saveInterviewRecord = (
+export const getCloudBackupConsent = (): boolean => {
+  if (Platform.OS !== 'web') return false;
+  try {
+    const consent = localStorage.getItem(CONSENT_KEY);
+    return consent === 'true';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * 클라우드 백업 동의 설정
+ */
+export const setCloudBackupConsent = (consent: boolean): void => {
+  if (Platform.OS !== 'web') return;
+  try {
+    localStorage.setItem(CONSENT_KEY, consent.toString());
+  } catch (error) {
+    console.error('Failed to save consent:', error);
+  }
+};
+
+/**
+ * 면접 기록 저장 (로컬 + 클라우드)
+ */
+export const saveInterviewRecord = async (
   company: Company,
   position: Position,
   experience: Experience,
   messages: Message[],
-  difficultQuestionIds: string[]
-): InterviewRecord => {
+  difficultQuestionIds: string[],
+  files?: UploadedFile[]
+): Promise<InterviewRecord> => {
   // 웹 환경에서만 LocalStorage 사용
   if (Platform.OS !== 'web') {
     console.warn('Storage is only available on web platform');
@@ -38,13 +66,23 @@ export const saveInterviewRecord = (
   };
 
   try {
+    // 로컬 스토리지에 저장
     const existingRecords = getInterviewRecords();
     const updatedRecords = [record, ...existingRecords];
-
-    // 최대 20개까지만 저장
     const recordsToSave = updatedRecords.slice(0, 20);
-
     localStorage.setItem(STORAGE_KEY, JSON.stringify(recordsToSave));
+
+    // 사용자가 동의한 경우 클라우드에도 저장
+    if (getCloudBackupConsent()) {
+      try {
+        await saveInterviewToCloud(record, files);
+        console.log('✅ 클라우드 백업 완료');
+      } catch (cloudError) {
+        console.error('❌ 클라우드 백업 실패 (로컬에는 저장됨):', cloudError);
+        // 클라우드 실패해도 로컬 저장은 성공
+      }
+    }
+
     return record;
   } catch (error) {
     console.error('Failed to save interview record:', error);

@@ -9,8 +9,9 @@ import { SavedInterviews } from './components/SavedInterviews';
 import { SaveSuccessModal } from './components/SaveSuccessModal';
 import { UploadedFile, Company, Message, Position, Experience, InterviewRecord } from './types';
 import { analyzePortfolio } from './services/api';
-import { saveInterviewRecord, getDifficultQuestions } from './services/storage';
+import { saveInterviewRecord, getDifficultQuestions, getCloudBackupConsent, setCloudBackupConsent } from './services/storage';
 import { getErrorMessage, logError } from './utils/errorHandler';
+import { ConsentModal } from './components/ConsentModal';
 
 type Step = 'upload' | 'company' | 'chat' | 'review' | 'saved' | 'viewRecord';
 
@@ -28,6 +29,8 @@ export default function App() {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [lastSavedRecord, setLastSavedRecord] = useState<InterviewRecord | null>(null);
   const [lastDifficultCount, setLastDifficultCount] = useState(0);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [consentAsked, setConsentAsked] = useState(false);
 
   const handleFileSelect = (file: UploadedFile, allFiles?: UploadedFile[]) => {
     setUploadedFile(file);
@@ -151,19 +154,29 @@ export default function App() {
     setCurrentStep('review');
   };
 
-  const handleSaveReview = (difficultQuestionIds: string[]) => {
+  const handleSaveReview = async (difficultQuestionIds: string[]) => {
     if (!selectedCompany || !selectedPosition || !selectedExperience) {
       alert('회사, 직무, 경력 정보가 필요합니다.');
       return;
     }
 
+    // 첫 저장 시 동의 모달 표시
+    if (!consentAsked) {
+      setConsentAsked(true);
+      setShowConsentModal(true);
+      // 동의 후 저장할 데이터 임시 저장
+      (window as any).__pendingSave = { difficultQuestionIds };
+      return;
+    }
+
     try {
-      const savedRecord = saveInterviewRecord(
+      const savedRecord = await saveInterviewRecord(
         selectedCompany,
         selectedPosition,
         selectedExperience,
         messages,
-        difficultQuestionIds
+        difficultQuestionIds,
+        uploadedFiles.length > 0 ? uploadedFiles : undefined
       );
 
       // 모달 표시
@@ -171,6 +184,7 @@ export default function App() {
       setLastDifficultCount(difficultQuestionIds.length);
       setShowSaveModal(true);
     } catch (error) {
+      logError('handleSaveReview', error);
       alert('저장에 실패했습니다.');
     }
   };
@@ -233,6 +247,30 @@ export default function App() {
       setSelectedRecord(null);
       setShowDifficultOnly(false);
       setCurrentStep('upload');
+    }
+  };
+
+  const handleConsentAccept = async () => {
+    setCloudBackupConsent(true);
+    setShowConsentModal(false);
+
+    // 대기 중인 저장 실행
+    const pendingSave = (window as any).__pendingSave;
+    if (pendingSave) {
+      delete (window as any).__pendingSave;
+      await handleSaveReview(pendingSave.difficultQuestionIds);
+    }
+  };
+
+  const handleConsentDecline = async () => {
+    setCloudBackupConsent(false);
+    setShowConsentModal(false);
+
+    // 로컬에만 저장
+    const pendingSave = (window as any).__pendingSave;
+    if (pendingSave) {
+      delete (window as any).__pendingSave;
+      await handleSaveReview(pendingSave.difficultQuestionIds);
     }
   };
 
@@ -426,6 +464,12 @@ export default function App() {
         onViewNow={handleViewSavedNow}
         onViewList={handleViewSavedList}
         onNewInterview={handleStartNewInterview}
+      />
+
+      <ConsentModal
+        visible={showConsentModal}
+        onAccept={handleConsentAccept}
+        onDecline={handleConsentDecline}
       />
     </SafeAreaView>
   );
