@@ -7,6 +7,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "dev": "tsx dev-server.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
@@ -36,8 +37,10 @@
     "@types/react": "~19.1.0",
     "@vercel/node": "^5.5.6",
     "axios-mock-adapter": "^2.1.0",
+    "express": "^5.1.0",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.5",
+    "tsx": "^4.20.6",
     "typescript": "~5.9.2"
   },
   "private": true
