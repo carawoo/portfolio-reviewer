@@ -39,15 +39,17 @@ export const analyzePortfolio = async (
   request: AnalysisRequest
 ): Promise<AnalysisResponse> => {
   try {
-    const base64File = await fileToBase64(request.file);
+    // extractedText가 있으면 base64 변환 건너뛰기 (PDF 텍스트 추출 성공)
+    const base64File = request.file.extractedText ? undefined : await fileToBase64(request.file);
 
-    // 여러 파일이 있는 경우 각각 base64로 변환
+    // 여러 파일이 있는 경우 각각 처리
     let base64Files;
     if (request.files && request.files.length > 0) {
       base64Files = await Promise.all(
         request.files.map(async (file) => ({
           ...file,
-          base64: await fileToBase64(file),
+          // extractedText가 있으면 base64 변환 안 함
+          base64: file.extractedText ? undefined : await fileToBase64(file),
         }))
       );
     }
@@ -64,6 +66,7 @@ export const analyzePortfolio = async (
         position: request.position,
         experience: request.experience,
         conversationHistory: request.conversationHistory,
+        portfolioAnalysis: request.portfolioAnalysis, // 추가: 포트폴리오 분석 결과 전달
       },
       {
         timeout: 180000, // 3분 타임아웃 (대용량 PDF 처리)

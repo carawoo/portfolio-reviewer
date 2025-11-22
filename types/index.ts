@@ -14,6 +14,7 @@ export interface UploadedFile {
   type: 'image' | 'pdf';
   mimeType: string;
   base64?: string;
+  extractedText?: string; // PDF에서 추출한 텍스트 (있으면 이미지 대신 사용)
 }
 
 // 회사 정보 타입

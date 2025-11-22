@@ -192,19 +192,33 @@ const convertPdfToImages = async (
     const numPages = pdf.numPages;
     const uploadedFiles: UploadedFile[] = [];
 
-    // PDF 크기에 따라 처리 방식 결정
+    // 페이지 수에 따라 해상도와 품질 자동 조절
     const fileSizeMB = file.size / (1024 * 1024);
-    const isSmallPdf = fileSizeMB <= 3; // 3MB 이하는 작은 PDF
 
-    // 작은 PDF: 고품질 처리 (보통 이력서/경력기술서)
-    // 큰 PDF: 중간 품질 처리 (보통 포트폴리오)
-    const MAX_PAGES = isSmallPdf ? 15 : 8;
-    const SCALE = isSmallPdf ? 4.0 : 2.5; // 작은 PDF는 초고해상도
+    // 모든 페이지 처리 (제한 없음)
+    const pagesToProcess = numPages;
 
-    const pagesToProcess = Math.min(numPages, MAX_PAGES);
+    // 페이지 수에 따라 해상도 조절 (많을수록 낮춤)
+    let SCALE: number;
+    let quality: 'ultra' | 'high' | 'medium' | 'low';
 
-    console.log(`PDF 크기: ${fileSizeMB.toFixed(1)}MB (${isSmallPdf ? '초고품질' : '고품질'} 모드)`);
-    console.log(`PDF 총 페이지: ${numPages}${numPages > MAX_PAGES ? ` (${MAX_PAGES}페이지만 처리)` : ''}`);
+    if (numPages <= 5) {
+      SCALE = 4.0; // 초고해상도
+      quality = 'ultra';
+    } else if (numPages <= 10) {
+      SCALE = 3.0; // 고해상도
+      quality = 'high';
+    } else if (numPages <= 20) {
+      SCALE = 2.0; // 중해상도
+      quality = 'medium';
+    } else {
+      SCALE = 1.5; // 저해상도 (많은 페이지)
+      quality = 'low';
+    }
+
+    console.log(`PDF 분석: ${numPages}페이지, 크기 ${fileSizeMB.toFixed(1)}MB`);
+    console.log(`품질 모드: ${quality} (scale: ${SCALE})`);
+    console.log(`모든 ${pagesToProcess}페이지 처리 예정`);
 
     // 각 페이지를 이미지로 변환
     for (let pageNum = 1; pageNum <= pagesToProcess; pageNum++) {
@@ -223,8 +237,8 @@ const convertPdfToImages = async (
         viewport: viewport,
       }).promise;
 
-      // Canvas를 Blob으로 변환 (작은 PDF는 최고 품질)
-      const blobQuality = isSmallPdf ? 0.95 : 0.8;
+      // 품질 모드에 따라 압축률 조절
+      const blobQuality = quality === 'ultra' ? 0.95 : quality === 'high' ? 0.85 : quality === 'medium' ? 0.75 : 0.65;
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (blob) => {
@@ -236,10 +250,11 @@ const convertPdfToImages = async (
         );
       });
 
-      // 이미지 압축 (작은 PDF는 고품질 모드)
-      const base64 = await resizeAndCompressImage(blob, isSmallPdf);
+      // 이미지 압축 (품질 모드에 따라)
+      const useHighQuality = quality === 'ultra' || quality === 'high';
+      const base64 = await resizeAndCompressImage(blob, useHighQuality);
 
-      const uriQuality = isSmallPdf ? 0.95 : 0.8;
+      const uriQuality = blobQuality;
       uploadedFiles.push({
         uri: canvas.toDataURL('image/jpeg', uriQuality),
         name: `page-${pageNum}.jpg`,
@@ -373,27 +388,31 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
 
             console.log(`총 변환 크기: ${totalSize.toFixed(2)}MB`);
 
-            if (totalSize > 4.0) {
+            // 크기 확인 (10MB까지 허용 - Vercel 페이로드 제한 고려)
+            if (totalSize > 10.0) {
               alert(
                 `변환 후 총 크기가 ${totalSize.toFixed(2)}MB입니다.\n\n` +
-                `최대 크기 4.0MB를 초과하여 일부 페이지만 업로드합니다.`
+                `최대 크기 10MB를 초과하여 일부 페이지만 업로드합니다.\n` +
+                `처음부터 ${Math.floor(10.0 / (totalSize / uploadedFiles.length))}페이지만 포함됩니다.`
               );
-              // 4.0MB 이하가 될 때까지 페이지 제거
+              // 10.0MB 이하가 될 때까지 페이지 제거
               let currentSize = 0;
               const limitedFiles: UploadedFile[] = [];
               for (const file of uploadedFiles) {
                 const fileSize = file.base64 ? (file.base64.length * 0.75) / (1024 * 1024) : 0;
-                if (currentSize + fileSize <= 4.0) {
+                if (currentSize + fileSize <= 10.0) {
                   limitedFiles.push(file);
                   currentSize += fileSize;
                 } else {
                   break;
                 }
               }
+              console.log(`⚠️ 크기 제한으로 ${limitedFiles.length}/${uploadedFiles.length}페이지만 업로드`);
               setSelectedFile(limitedFiles[0]);
               setSelectedFiles(limitedFiles);
               onFileSelect(limitedFiles[0], limitedFiles);
             } else {
+              console.log(`✅ 전체 ${uploadedFiles.length}페이지 업로드 (${totalSize.toFixed(2)}MB)`);
               setSelectedFile(uploadedFiles[0]);
               setSelectedFiles(uploadedFiles);
               onFileSelect(uploadedFiles[0], uploadedFiles);

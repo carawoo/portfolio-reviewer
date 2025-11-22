@@ -36,6 +36,8 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
   const [customPositionName, setCustomPositionName] = useState('');
   const [isSearchingCompany, setIsSearchingCompany] = useState(false);
   const [jobPostingContent, setJobPostingContent] = useState('');
+  const [searchedCompany, setSearchedCompany] = useState<Company | null>(null);
+  const [searchError, setSearchError] = useState<string>('');
 
   const scrollViewRef = useRef<ScrollView>(null);
   const experienceSectionRef = useRef<View>(null);
@@ -90,6 +92,57 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
   const filteredCompanies = companies.filter((company) =>
     company.name.toLowerCase().includes(searchText.toLowerCase())
   );
+
+  // 검색어 입력 시 자동으로 회사 검색
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const searchCompany = async () => {
+      const trimmedSearch = searchText.trim();
+
+      // 검색어가 없거나 기존 회사 목록에 있으면 스킵
+      if (!trimmedSearch || filteredCompanies.length > 0) {
+        setSearchedCompany(null);
+        setSearchError('');
+        return;
+      }
+
+      // 이미 검색한 회사면 스킵
+      if (searchedCompany && searchedCompany.name === trimmedSearch) {
+        return;
+      }
+
+      setIsSearchingCompany(true);
+      setSearchError('');
+
+      try {
+        const positionName = selectedPosition ?
+          positions.find(p => p.id === selectedPosition)?.name || customPositionName :
+          '';
+
+        const result = await searchCompanyInfo(trimmedSearch, positionName);
+
+        setSearchedCompany(result.company);
+        setSearchError('');
+      } catch (error: any) {
+        console.error('회사 검색 실패:', error);
+        setSearchedCompany(null);
+        setSearchError(`"${trimmedSearch}" 회사 정보를 찾을 수 없습니다. 직접 추가하시겠습니까?`);
+      } finally {
+        setIsSearchingCompany(false);
+      }
+    };
+
+    // 디바운싱: 500ms 후 검색
+    if (searchText.trim()) {
+      timeoutId = setTimeout(searchCompany, 800);
+    } else {
+      setSearchedCompany(null);
+      setSearchError('');
+    }
+
+    return () => clearTimeout(timeoutId);
+  }, [searchText]);
 
   const handlePositionSelect = (position: Position) => {
     if (position === 'other') {
@@ -305,6 +358,72 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
               placeholderTextColor="#999999"
             />
 
+            {/* 검색 중 표시 */}
+            {isSearchingCompany && searchText.trim() && filteredCompanies.length === 0 && (
+              <View style={styles.searchingCard}>
+                <ActivityIndicator size="small" color="#000000" />
+                <Text style={styles.searchingText}>
+                  "{searchText}" 회사 정보를 검색 중...
+                </Text>
+              </View>
+            )}
+
+            {/* 검색 결과 회사 표시 (기존 목록에 없는 경우) */}
+            {!isSearchingCompany && searchedCompany && filteredCompanies.length === 0 && (
+              <View>
+                <View style={styles.searchResultHeader}>
+                  <Text style={styles.searchResultTitle}>✨ 검색 결과</Text>
+                  <Text style={styles.searchResultDesc}>실제 존재하는 회사입니다</Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.companyCard,
+                    selectedCompany?.id === searchedCompany.id && styles.selectedCard,
+                    styles.searchedCompanyCard,
+                  ]}
+                  onPress={() => {
+                    onCompanySelect(searchedCompany);
+                    setSearchText('');
+                  }}
+                >
+                  <View style={styles.cardContent}>
+                    <Text style={styles.companyName}>{searchedCompany.name}</Text>
+                    <Text style={styles.companyIndustry}>{searchedCompany.industry}</Text>
+                  </View>
+                  <View style={styles.focusContainer}>
+                    {searchedCompany.interviewFocus.slice(0, 3).map((focus, index) => (
+                      <View key={index} style={styles.focusTag}>
+                        <Text style={styles.focusText}>{focus}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {selectedCompany?.id === searchedCompany.id && (
+                    <View style={styles.checkmark}>
+                      <Text style={styles.checkmarkText}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* 검색 실패 메시지 */}
+            {!isSearchingCompany && searchError && filteredCompanies.length === 0 && !searchedCompany && (
+              <View style={styles.errorCard}>
+                <Text style={styles.errorTitle}>❌ {searchError}</Text>
+                <TouchableOpacity
+                  style={styles.errorAddButton}
+                  onPress={() => {
+                    setCustomCompanyName(searchText.trim());
+                    setShowCustomInput(true);
+                    setSearchError('');
+                  }}
+                >
+                  <Text style={styles.errorAddButtonText}>+ 직접 추가하기</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* 기존 회사 목록 */}
             {filteredCompanies.map((company) => (
           <TouchableOpacity
             key={company.id}
@@ -673,5 +792,68 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     color: '#666666',
+  },
+  searchingCard: {
+    backgroundColor: '#F8F9FA',
+    padding: 24,
+    borderRadius: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  searchingText: {
+    fontSize: 15,
+    color: '#666666',
+    fontWeight: '500',
+  },
+  searchResultHeader: {
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  searchResultTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  searchResultDesc: {
+    fontSize: 13,
+    color: '#666666',
+  },
+  searchedCompanyCard: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#F1F8F4',
+  },
+  errorCard: {
+    backgroundColor: '#FFF5F5',
+    padding: 24,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+    gap: 16,
+  },
+  errorTitle: {
+    fontSize: 15,
+    color: '#D32F2F',
+    fontWeight: '600',
+    lineHeight: 22,
+  },
+  errorAddButton: {
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  errorAddButtonText: {
+    fontSize: 15,
+    color: '#000000',
+    fontWeight: '600',
   },
 });
