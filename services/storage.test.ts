@@ -70,8 +70,8 @@ describe('Storage Service', () => {
   ];
 
   describe('saveInterviewRecord', () => {
-    it('면접 기록을 저장해야 한다', () => {
-      const record = saveInterviewRecord(
+    it('면접 기록을 저장해야 한다', async () => {
+      const record = await saveInterviewRecord(
         mockCompany,
         mockPosition,
         mockExperience,
@@ -88,8 +88,8 @@ describe('Storage Service', () => {
       expect(record.difficultQuestions).toEqual(['msg1']);
     });
 
-    it('저장된 기록을 localStorage에서 가져올 수 있어야 한다', () => {
-      saveInterviewRecord(
+    it('저장된 기록을 localStorage에서 가져올 수 있어야 한다', async () => {
+      await saveInterviewRecord(
         mockCompany,
         mockPosition,
         mockExperience,
@@ -102,10 +102,10 @@ describe('Storage Service', () => {
       expect(records[0].company.name).toBe('테스트 회사');
     });
 
-    it('최대 20개까지만 저장해야 한다', () => {
+    it('최대 20개까지만 저장해야 한다', async () => {
       // 21개의 기록 저장
       for (let i = 0; i < 21; i++) {
-        saveInterviewRecord(
+        await saveInterviewRecord(
           { ...mockCompany, id: `company-${i}` },
           mockPosition,
           mockExperience,
@@ -125,9 +125,9 @@ describe('Storage Service', () => {
       expect(records).toEqual([]);
     });
 
-    it('모든 저장된 기록을 반환해야 한다', () => {
-      saveInterviewRecord(mockCompany, mockPosition, mockExperience, mockMessages, []);
-      saveInterviewRecord(
+    it('모든 저장된 기록을 반환해야 한다', async () => {
+      await saveInterviewRecord(mockCompany, mockPosition, mockExperience, mockMessages, []);
+      await saveInterviewRecord(
         { ...mockCompany, name: '회사2' },
         mockPosition,
         mockExperience,
@@ -139,8 +139,8 @@ describe('Storage Service', () => {
       expect(records).toHaveLength(2);
     });
 
-    it('Date 객체를 올바르게 복원해야 한다', () => {
-      saveInterviewRecord(mockCompany, mockPosition, mockExperience, mockMessages, []);
+    it('Date 객체를 올바르게 복원해야 한다', async () => {
+      await saveInterviewRecord(mockCompany, mockPosition, mockExperience, mockMessages, []);
 
       const records = getInterviewRecords();
       expect(records[0].createdAt).toBeInstanceOf(Date);
@@ -149,8 +149,8 @@ describe('Storage Service', () => {
   });
 
   describe('getInterviewRecord', () => {
-    it('특정 ID의 기록을 반환해야 한다', () => {
-      const saved = saveInterviewRecord(
+    it('특정 ID의 기록을 반환해야 한다', async () => {
+      const saved = await saveInterviewRecord(
         mockCompany,
         mockPosition,
         mockExperience,
@@ -170,8 +170,8 @@ describe('Storage Service', () => {
   });
 
   describe('deleteInterviewRecord', () => {
-    it('특정 기록을 삭제해야 한다', () => {
-      const saved = saveInterviewRecord(
+    it('특정 기록을 삭제해야 한다', async () => {
+      const saved = await saveInterviewRecord(
         mockCompany,
         mockPosition,
         mockExperience,
@@ -190,9 +190,9 @@ describe('Storage Service', () => {
       expect(records).toHaveLength(0);
     });
 
-    it.skip('다른 기록은 유지해야 한다', () => {
+    it.skip('다른 기록은 유지해야 한다', async () => {
       // 첫 번째 기록 저장
-      saveInterviewRecord(
+      await saveInterviewRecord(
         mockCompany,
         mockPosition,
         mockExperience,
@@ -201,7 +201,7 @@ describe('Storage Service', () => {
       );
 
       // 두 번째 기록 저장
-      const saved2 = saveInterviewRecord(
+      const saved2 = await saveInterviewRecord(
         { ...mockCompany, id: 'company-2', name: '회사2' },
         mockPosition,
         mockExperience,

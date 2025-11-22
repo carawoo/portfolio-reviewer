@@ -42,14 +42,18 @@ export const analyzePortfolio = async (
     // extractedText가 있으면 base64 변환 건너뛰기 (PDF 텍스트 추출 성공)
     const base64File = request.file.extractedText ? undefined : await fileToBase64(request.file);
 
-    // 여러 파일이 있는 경우 각각 처리
+    // 여러 파일이 있는 경우 각각 처리 (uri 제거하여 페이로드 크기 절반으로 줄임)
     let base64Files;
     if (request.files && request.files.length > 0) {
       base64Files = await Promise.all(
         request.files.map(async (file) => ({
-          ...file,
+          name: file.name,
+          type: file.type,
+          mimeType: file.mimeType,
+          extractedText: file.extractedText,
           // extractedText가 있으면 base64 변환 안 함
           base64: file.extractedText ? undefined : await fileToBase64(file),
+          // uri는 서버에 보내지 않음 (중복 데이터 제거)
         }))
       );
     }
@@ -58,8 +62,12 @@ export const analyzePortfolio = async (
       `${API_BASE_URL}/analyze`,
       {
         file: {
-          ...request.file,
+          name: request.file.name,
+          type: request.file.type,
+          mimeType: request.file.mimeType,
+          extractedText: request.file.extractedText,
           base64: base64File,
+          // uri는 서버에 보내지 않음 (중복 데이터 제거)
         },
         files: base64Files,
         company: request.company,
