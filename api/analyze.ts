@@ -289,56 +289,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           chunks.push(imagesToAnalyze.slice(i, i + CHUNK_SIZE));
         }
 
-        console.log(`총 ${chunks.length}개 청크로 분할`);
+        console.log(`총 ${chunks.length}개 청크로 분할 - 병렬 처리 시작`);
 
-        // 각 청크를 GPT-4o Vision으로 분석해서 텍스트 추출
-        const extractedTexts: string[] = [];
+        // 각 청크를 GPT-4o Vision으로 병렬 분석해서 텍스트 추출 (시간 대폭 단축)
+        const extractedTexts = await Promise.all(
+          chunks.map(async (chunk, chunkIndex) => {
+            console.log(`청크 ${chunkIndex + 1}/${chunks.length} 병렬 처리 시작 (${chunk.length}장)`);
 
-        for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-          const chunk = chunks[chunkIndex];
-          console.log(`청크 ${chunkIndex + 1}/${chunks.length} 처리 중 (${chunk.length}장)`);
+            const visionContent: any[] = [{
+              type: 'text',
+              text: `다음 이미지들(포트폴리오/이력서/경력기술서)에서 텍스트와 중요 정보를 추출해주세요.\n\n` +
+              '🚨 **중요 지침:**\n' +
+              '1. **이미지에 실제로 보이는 내용만 작성하세요**\n' +
+              '2. **회사명, 프로젝트명, 기술명을 절대 지어내지 마세요**\n' +
+              '3. **추측, 가정, 예시를 절대 사용하지 마세요**\n' +
+              '4. **텍스트, 숫자, 날짜 등을 정확히 추출하세요**\n' +
+              '5. **레이아웃, 디자인 요소도 설명하세요** (차트, 다이어그램, UI 등)\n\n' +
+              '추출된 모든 내용을 상세하게 작성해주세요:'
+            }];
 
-          const visionContent: any[] = [{
-            type: 'text',
-            text: `다음 이미지들(포트폴리오/이력서/경력기술서)에서 텍스트와 중요 정보를 추출해주세요.\n\n` +
-            '🚨 **중요 지침:**\n' +
-            '1. **이미지에 실제로 보이는 내용만 작성하세요**\n' +
-            '2. **회사명, 프로젝트명, 기술명을 절대 지어내지 마세요**\n' +
-            '3. **추측, 가정, 예시를 절대 사용하지 마세요**\n' +
-            '4. **텍스트, 숫자, 날짜 등을 정확히 추출하세요**\n' +
-            '5. **레이아웃, 디자인 요소도 설명하세요** (차트, 다이어그램, UI 등)\n\n' +
-            '추출된 모든 내용을 상세하게 작성해주세요:'
-          }];
-
-          chunk.forEach(file => {
-            visionContent.push({
-              type: 'image_url',
-              image_url: { url: `data:${file.mimeType};base64,${file.base64}` },
+            chunk.forEach(file => {
+              visionContent.push({
+                type: 'image_url',
+                image_url: { url: `data:${file.mimeType};base64,${file.base64}` },
+              });
             });
-          });
 
-          const visionMessages: OpenAI.ChatCompletionMessageParam[] = [
-            {
-              role: 'system',
-              content: '당신은 이미지에서 텍스트와 정보를 정확하게 추출하는 전문가입니다. 이미지에 보이는 모든 내용을 빠짐없이 추출하세요.'
-            },
-            {
-              role: 'user',
-              content: visionContent,
-            }
-          ];
+            const visionMessages: OpenAI.ChatCompletionMessageParam[] = [
+              {
+                role: 'system',
+                content: '당신은 이미지에서 텍스트와 정보를 정확하게 추출하는 전문가입니다. 이미지에 보이는 모든 내용을 빠짐없이 추출하세요.'
+              },
+              {
+                role: 'user',
+                content: visionContent,
+              }
+            ];
 
-          const visionCompletion = await openai.chat.completions.create({
-            model: 'gpt-4o',
-            messages: visionMessages,
-            max_tokens: 2000,
-            temperature: 0.2,
-          });
+            const visionCompletion = await openai.chat.completions.create({
+              model: 'gpt-4o',
+              messages: visionMessages,
+              max_tokens: 2000,
+              temperature: 0.2,
+            });
 
-          const extractedText = visionCompletion.choices[0]?.message?.content || '';
-          extractedTexts.push(extractedText);
-          console.log(`청크 ${chunkIndex + 1} 추출 완료 (${extractedText.length}자)`);
-        }
+            const extractedText = visionCompletion.choices[0]?.message?.content || '';
+            console.log(`청크 ${chunkIndex + 1} 추출 완료 (${extractedText.length}자)`);
+            return extractedText;
+          })
+        );
+
+        console.log(`✅ 병렬 처리 완료: ${chunks.length}개 청크`);
 
         // 모든 텍스트 합치기
         const combinedExtractedText = extractedTexts.join('\n\n=== 다음 페이지 ===\n\n');
