@@ -278,6 +278,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState<string>('');
   const [conversionProgress, setConversionProgress] = useState<{ current: number; total: number } | null>(null);
+  const [showProjectTip, setShowProjectTip] = useState(true);
 
   // PDF.js 미리 로드 (웹 환경에서만)
   useEffect(() => {
@@ -527,6 +528,26 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
         <Text style={styles.title}>문서 업로드</Text>
         <Text style={styles.subtitle}>포트폴리오, 이력서, 경력기술서 등을 업로드해주세요</Text>
 
+        {/* 프로젝트 팁 */}
+        {showProjectTip && (
+          <View style={styles.projectTip}>
+            <View style={styles.projectTipHeader}>
+              <Text style={styles.projectTipIcon}>💡</Text>
+              <Text style={styles.projectTipTitle}>효과적인 면접 연습 방법</Text>
+              <TouchableOpacity onPress={() => setShowProjectTip(false)} style={styles.projectTipClose}>
+                <Text style={styles.projectTipCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.projectTipText}>
+              <Text style={styles.projectTipBold}>하나의 프로젝트</Text>씩 자신있는 내용으로 면접 시뮬레이션을 진행하세요
+            </Text>
+            <Text style={styles.projectTipSubtext}>
+              • 프로젝트별로 집중 연습하면 더 깊이 있는 질문과 답변이 가능합니다{'\n'}
+              • 여러 프로젝트가 있다면 각각 별도로 연습해보세요
+            </Text>
+          </View>
+        )}
+
         {/* 개인정보 보호 안내 */}
         <View style={styles.privacyNotice}>
           <View style={styles.privacyHeader}>
@@ -550,8 +571,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
         </View>
 
         <Text style={styles.sizeLimit}>• 이미지: 최대 6개 선택 가능 (고품질 유지)</Text>
-        <Text style={styles.sizeLimit}>• PDF: 크기에 따라 최적화 (3MB 이하는 초고품질, 이상은 고품질)</Text>
-        <Text style={styles.sizeTip}>💡 작은 PDF는 초고해상도로 처리되어 텍스트가 완벽하게 인식됩니다</Text>
+        <Text style={styles.sizeLimit}>• PDF: 모든 페이지 처리 (페이지 수에 따라 자동 최적화)</Text>
+        <Text style={styles.sizeTip}>💡 PDF는 5장씩 분석되어 정확하고 빠르게 처리됩니다</Text>
       </View>
 
       {/* 예시 질문 섹션 */}
@@ -756,6 +777,58 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginTop: 8,
     lineHeight: 18,
+  },
+  projectTip: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  projectTipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  projectTipIcon: {
+    fontSize: 18,
+  },
+  projectTipTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#D97706',
+    flex: 1,
+  },
+  projectTipClose: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  projectTipCloseText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  projectTipText: {
+    fontSize: 14,
+    color: '#92400E',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  projectTipBold: {
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  projectTipSubtext: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 18,
+    opacity: 0.8,
   },
   privacyNotice: {
     backgroundColor: '#F0F9FF',
