@@ -290,8 +290,8 @@ export default function App() {
       {/* Modern Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>포트폴리오 리뷰어</Text>
-          <Text style={styles.headerSubtitle}>AI 기반 맞춤형 검토</Text>
+          <Text style={styles.headerTitle}>AI 면접 리뷰어</Text>
+          <Text style={styles.headerSubtitle}>실무진 관점의 맞춤형 면접 연습</Text>
         </View>
         <View style={styles.headerActions}>
           {currentStep === 'upload' && (

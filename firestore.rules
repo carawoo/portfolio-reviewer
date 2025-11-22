@@ -6,8 +6,9 @@ service cloud.firestore {
       // 모든 사용자가 자신의 면접 기록을 생성할 수 있음 (익명)
       allow create: if true;
 
-      // 읽기는 제한 (추후 인증 추가 시 수정)
-      allow read: if false;
+      // 읽기 허용 (관리자 페이지용)
+      // TODO: 추후 Firebase Auth로 특정 관리자만 읽을 수 있도록 변경 필요
+      allow read: if true;
 
       // 수정/삭제는 불가
       allow update, delete: if false;

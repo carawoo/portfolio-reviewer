@@ -57,14 +57,14 @@ const loadPdfJs = (): Promise<void> => {
 };
 
 // 이미지를 리사이즈하고 압축
-const resizeAndCompressImage = (file: Blob): Promise<string> => {
+const resizeAndCompressImage = (file: Blob, highQuality: boolean = false): Promise<string> => {
   return new Promise((resolve, reject) => {
     const img = new (window as any).Image();
     const url = URL.createObjectURL(file);
 
     img.onload = () => {
-      // 극도로 작은 크기로 압축 (400px) - Vercel 4.5MB 제한 회피
-      const MAX_SIZE = 400;
+      // 품질 모드에 따라 크기 조절
+      const MAX_SIZE = highQuality ? 1600 : 1000;
       let width = img.width;
       let height = img.height;
 
@@ -87,7 +87,8 @@ const resizeAndCompressImage = (file: Blob): Promise<string> => {
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
 
-      // 품질을 극도로 낮춰서 압축 (0.4)
+      // 품질 모드에 따라 압축률 조절
+      const quality = highQuality ? 0.9 : 0.75;
       canvas.toBlob(
         (blob) => {
           if (blob) {
@@ -96,10 +97,11 @@ const resizeAndCompressImage = (file: Blob): Promise<string> => {
             reader.onload = () => {
               const base64 = (reader.result as string).split(',')[1];
               const sizeInMB = (base64.length * 0.75) / (1024 * 1024);
-              console.log(`압축 후 크기: ${sizeInMB.toFixed(2)}MB`);
+              console.log(`압축 후 크기: ${sizeInMB.toFixed(2)}MB (${highQuality ? '고품질' : '표준'})`);
 
-              // 2.5MB 초과 시 에러 (매우 안전한 제한)
-              if (sizeInMB > 2.5) {
+              // 4.0MB 초과 시 에러 (고품질 모드는 더 여유 있게)
+              const maxSize = highQuality ? 4.0 : 3.5;
+              if (sizeInMB > maxSize) {
                 URL.revokeObjectURL(url);
                 reject(new Error('파일이 너무 큽니다. 더 작은 이미지를 사용해주세요.'));
                 return;
@@ -114,7 +116,7 @@ const resizeAndCompressImage = (file: Blob): Promise<string> => {
           }
         },
         'image/jpeg',
-        0.4
+        quality
       );
     };
 
@@ -136,7 +138,43 @@ const fileToBase64Web = (file: Blob): Promise<string> => {
   });
 };
 
-// PDF를 이미지 배열로 변환 (대용량 PDF 자동 압축)
+// PDF에서 텍스트 추출 (이미지 변환 대신 사용)
+const extractTextFromPdf = async (file: Blob): Promise<string> => {
+  try {
+    await loadPdfJs();
+
+    if (!window.pdfjsLib) {
+      throw new Error('PDF.js 라이브러리를 로드할 수 없습니다.');
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const numPages = pdf.numPages;
+
+    let fullText = '';
+
+    // 모든 페이지에서 텍스트 추출
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+
+      // 텍스트 아이템들을 결합
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+
+      fullText += `\n\n=== 페이지 ${pageNum} ===\n${pageText}`;
+    }
+
+    console.log(`PDF 텍스트 추출 완료: ${numPages}페이지, ${fullText.length}자`);
+    return fullText.trim();
+  } catch (error) {
+    console.error('PDF 텍스트 추출 오류:', error);
+    throw new Error('PDF에서 텍스트를 추출할 수 없습니다.');
+  }
+};
+
+// PDF를 이미지 배열로 변환 (크기에 따라 품질 조절)
 const convertPdfToImages = async (
   file: Blob,
   onProgress?: (current: number, total: number) => void
@@ -154,10 +192,18 @@ const convertPdfToImages = async (
     const numPages = pdf.numPages;
     const uploadedFiles: UploadedFile[] = [];
 
-    // 최대 15페이지로 제한 (Vercel 4.5MB body limit 회피)
-    const MAX_PAGES = 15;
+    // PDF 크기에 따라 처리 방식 결정
+    const fileSizeMB = file.size / (1024 * 1024);
+    const isSmallPdf = fileSizeMB <= 3; // 3MB 이하는 작은 PDF
+
+    // 작은 PDF: 고품질 처리 (보통 이력서/경력기술서)
+    // 큰 PDF: 중간 품질 처리 (보통 포트폴리오)
+    const MAX_PAGES = isSmallPdf ? 15 : 8;
+    const SCALE = isSmallPdf ? 4.0 : 2.5; // 작은 PDF는 초고해상도
+
     const pagesToProcess = Math.min(numPages, MAX_PAGES);
 
+    console.log(`PDF 크기: ${fileSizeMB.toFixed(1)}MB (${isSmallPdf ? '초고품질' : '고품질'} 모드)`);
     console.log(`PDF 총 페이지: ${numPages}${numPages > MAX_PAGES ? ` (${MAX_PAGES}페이지만 처리)` : ''}`);
 
     // 각 페이지를 이미지로 변환
@@ -165,7 +211,7 @@ const convertPdfToImages = async (
       onProgress?.(pageNum, pagesToProcess);
 
       const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 1.0 }); // 낮은 해상도 (413 에러 방지)
+      const viewport = page.getViewport({ scale: SCALE }); // 크기에 따라 해상도 조절
 
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
@@ -177,7 +223,8 @@ const convertPdfToImages = async (
         viewport: viewport,
       }).promise;
 
-      // Canvas를 Blob으로 변환 (품질 낮춤)
+      // Canvas를 Blob으로 변환 (작은 PDF는 최고 품질)
+      const blobQuality = isSmallPdf ? 0.95 : 0.8;
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (blob) => {
@@ -185,15 +232,16 @@ const convertPdfToImages = async (
             else reject(new Error('Canvas to Blob failed'));
           },
           'image/jpeg',
-          0.6
+          blobQuality
         );
       });
 
-      // 이미지 압축
-      const base64 = await resizeAndCompressImage(blob);
+      // 이미지 압축 (작은 PDF는 고품질 모드)
+      const base64 = await resizeAndCompressImage(blob, isSmallPdf);
 
+      const uriQuality = isSmallPdf ? 0.95 : 0.8;
       uploadedFiles.push({
-        uri: canvas.toDataURL('image/jpeg', 0.6),
+        uri: canvas.toDataURL('image/jpeg', uriQuality),
         name: `page-${pageNum}.jpg`,
         type: 'image',
         mimeType: 'image/jpeg',
@@ -273,8 +321,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
 
         console.log(`총 크기: ${totalSize.toFixed(2)}MB`);
 
-        if (totalSize > 2.5) {
-          alert(`압축 후 총 크기가 ${totalSize.toFixed(2)}MB입니다.\n이미지를 더 적게 선택하거나 해상도가 낮은 이미지를 사용해주세요.\n(최대 2.5MB까지 업로드 가능)`);
+        if (totalSize > 4.0) {
+          alert(`압축 후 총 크기가 ${totalSize.toFixed(2)}MB입니다.\n이미지를 더 적게 선택하거나 해상도가 낮은 이미지를 사용해주세요.\n(최대 4.0MB까지 업로드 가능)`);
           return;
         }
 
@@ -304,33 +352,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
         const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
         const isPdf = file.type === 'application/pdf';
 
-        // PDF 용량 제한: 15MB 초과 시 자동 이미지 변환 제안
-        const MAX_PDF_SIZE = 15 * 1024 * 1024; // 15MB
-        if (isPdf && file.size > MAX_PDF_SIZE) {
-          const autoConvert = window.confirm(
-            `PDF 파일이 ${sizeInMB}MB로 용량 제한(15MB)을 초과합니다.\n\n` +
-            `✨ 자동으로 이미지로 변환하여 압축할까요?\n\n` +
-            `• PDF의 처음 15페이지를 이미지로 변환합니다\n` +
-            `• 자동으로 최적화하여 업로드합니다\n` +
-            `• 60MB 이상 대용량 PDF도 처리 가능합니다\n\n` +
-            `변환 시간: 약 1-2분 소요 예상`
-          );
-
-          if (!autoConvert) {
-            alert(
-              `PDF 압축 사이트를 이용해주세요:\n` +
-              `• ilovepdf.com\n` +
-              `• smallpdf.com`
-            );
-            return;
-          }
-
-          // PDF를 이미지로 자동 변환
+        // PDF인 경우: 항상 이미지로 변환 (Vision 모델이 텍스트+이미지 모두 분석)
+        if (isPdf) {
           setIsProcessing(true);
           setProcessingMessage('PDF를 이미지로 변환 중...');
           setConversionProgress({ current: 0, total: 0 });
 
           try {
+            console.log('📄 PDF를 이미지로 변환 (Vision 모델용)');
+
             const uploadedFiles = await convertPdfToImages(file, (current, total) => {
               setConversionProgress({ current, total });
               setProcessingMessage(`페이지 변환 중: ${current}/${total}`);
@@ -343,17 +373,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
 
             console.log(`총 변환 크기: ${totalSize.toFixed(2)}MB`);
 
-            if (totalSize > 2.5) {
+            if (totalSize > 4.0) {
               alert(
                 `변환 후 총 크기가 ${totalSize.toFixed(2)}MB입니다.\n\n` +
-                `최대 크기 2.5MB를 초과하여 일부 페이지만 업로드합니다.`
+                `최대 크기 4.0MB를 초과하여 일부 페이지만 업로드합니다.`
               );
-              // 2.5MB 이하가 될 때까지 페이지 제거
+              // 4.0MB 이하가 될 때까지 페이지 제거
               let currentSize = 0;
               const limitedFiles: UploadedFile[] = [];
               for (const file of uploadedFiles) {
                 const fileSize = file.base64 ? (file.base64.length * 0.75) / (1024 * 1024) : 0;
-                if (currentSize + fileSize <= 2.5) {
+                if (currentSize + fileSize <= 4.0) {
                   limitedFiles.push(file);
                   currentSize += fileSize;
                 } else {
@@ -375,37 +405,25 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
               setConversionProgress(null);
             }, 2000);
           } catch (error: any) {
-            console.error('PDF 변환 오류:', error);
-            alert(`PDF 변환 실패: ${error.message}`);
+            console.error('PDF 처리 오류:', error);
+            alert(`PDF 처리 실패: ${error.message}\n\n다른 PDF 파일을 시도해보세요.`);
           } finally {
             setIsProcessing(false);
           }
           return;
         }
 
-        // 15MB 이하 PDF 또는 일반 이미지 처리
-        // 대용량 파일 경고 (10MB 이상)
-        if (file.size > 10 * 1024 * 1024) {
-          const proceed = window.confirm(
-            `파일 크기: ${sizeInMB}MB\n\n` +
-            `업로드 및 분석에 시간이 오래 걸릴 수 있습니다.\n` +
-            `계속하시겠습니까?`
-          );
-          if (!proceed) return;
-        }
-
+        // 이미지 파일 처리
         setIsProcessing(true);
         setProcessingMessage('파일 처리 중...');
         try {
-          const base64 = isPdf
-            ? await fileToBase64Web(file)
-            : await resizeAndCompressImage(file);
+          const base64 = await resizeAndCompressImage(file);
 
           const uploadedFile: UploadedFile = {
             uri: URL.createObjectURL(file),
             name: file.name,
-            type: isPdf ? 'pdf' : 'image',
-            mimeType: isPdf ? file.type : 'image/jpeg',
+            type: 'image',
+            mimeType: 'image/jpeg',
             base64: base64,
           };
           setSelectedFile(uploadedFile);
@@ -487,8 +505,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>포트폴리오 업로드</Text>
-        <Text style={styles.subtitle}>이미지 또는 PDF 파일을 업로드해주세요</Text>
+        <Text style={styles.title}>문서 업로드</Text>
+        <Text style={styles.subtitle}>포트폴리오, 이력서, 경력기술서 등을 업로드해주세요</Text>
 
         {/* 개인정보 보호 안내 */}
         <View style={styles.privacyNotice}>
@@ -512,10 +530,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
           </View>
         </View>
 
-        <Text style={styles.sizeLimit}>• 이미지: 최대 6개 선택 가능 (자동 강력 압축)</Text>
-        <Text style={styles.sizeLimit}>• PDF: 15MB 이하 직접 업로드</Text>
-        <Text style={styles.sizeLimit}>• 대용량 PDF (60MB+): 처음 15페이지만 자동 변환 ✨</Text>
-        <Text style={styles.sizeTip}>💡 모든 이미지는 자동으로 400px 크기로 압축됩니다 (최대 2.5MB)</Text>
+        <Text style={styles.sizeLimit}>• 이미지: 최대 6개 선택 가능 (고품질 유지)</Text>
+        <Text style={styles.sizeLimit}>• PDF: 크기에 따라 최적화 (3MB 이하는 초고품질, 이상은 고품질)</Text>
+        <Text style={styles.sizeTip}>💡 작은 PDF는 초고해상도로 처리되어 텍스트가 완벽하게 인식됩니다</Text>
       </View>
 
       {/* 예시 질문 섹션 */}
