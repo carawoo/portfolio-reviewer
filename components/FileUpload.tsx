@@ -56,15 +56,15 @@ const loadPdfJs = (): Promise<void> => {
   });
 };
 
-// 이미지를 리사이즈하고 압축
+// 이미지를 리사이즈하고 압축 (GPT-4o Vision 분석 품질 유지하면서 페이로드 제한 준수)
 const resizeAndCompressImage = (file: Blob, highQuality: boolean = false): Promise<string> => {
   return new Promise((resolve, reject) => {
     const img = new (window as any).Image();
     const url = URL.createObjectURL(file);
 
     img.onload = () => {
-      // 품질 모드에 따라 크기 조절
-      const MAX_SIZE = highQuality ? 1600 : 1000;
+      // GPT-4o Vision이 텍스트를 제대로 읽을 수 있도록 적정 해상도 유지
+      const MAX_SIZE = 1200; // GPT-4o Vision OCR에 적합한 크기
       let width = img.width;
       let height = img.height;
 
@@ -87,8 +87,8 @@ const resizeAndCompressImage = (file: Blob, highQuality: boolean = false): Promi
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
 
-      // 품질 모드에 따라 압축률 조절
-      const quality = highQuality ? 0.9 : 0.75;
+      // 텍스트 인식을 위한 적정 품질 유지
+      const quality = 0.75;
       canvas.toBlob(
         (blob) => {
           if (blob) {
@@ -97,15 +97,7 @@ const resizeAndCompressImage = (file: Blob, highQuality: boolean = false): Promi
             reader.onload = () => {
               const base64 = (reader.result as string).split(',')[1];
               const sizeInMB = (base64.length * 0.75) / (1024 * 1024);
-              console.log(`압축 후 크기: ${sizeInMB.toFixed(2)}MB (${highQuality ? '고품질' : '표준'})`);
-
-              // 4.0MB 초과 시 에러 (고품질 모드는 더 여유 있게)
-              const maxSize = highQuality ? 4.0 : 3.5;
-              if (sizeInMB > maxSize) {
-                URL.revokeObjectURL(url);
-                reject(new Error('파일이 너무 큽니다. 더 작은 이미지를 사용해주세요.'));
-                return;
-              }
+              console.log(`압축 후 크기: ${sizeInMB.toFixed(3)}MB (OCR 최적화)`);
 
               URL.revokeObjectURL(url);
               resolve(base64);
@@ -198,22 +190,22 @@ const convertPdfToImages = async (
     // 모든 페이지 처리 (제한 없음)
     const pagesToProcess = numPages;
 
-    // 페이지 수에 따라 해상도 조절 (많을수록 낮춤)
+    // 페이로드 제한(4.5MB) 고려하되, GPT-4o Vision OCR 품질도 유지
     let SCALE: number;
-    let quality: 'ultra' | 'high' | 'medium' | 'low';
+    let quality: 'high' | 'medium' | 'low';
 
     if (numPages <= 5) {
-      SCALE = 4.0; // 초고해상도
-      quality = 'ultra';
+      SCALE = 2.5; // 5장 이하: 고해상도 (OCR 최적)
+      quality = 'high';
     } else if (numPages <= 10) {
-      SCALE = 3.0; // 고해상도
+      SCALE = 2.0; // 10장 이하: 중고해상도
       quality = 'high';
     } else if (numPages <= 20) {
-      SCALE = 2.0; // 중해상도
+      SCALE = 1.5; // 20장 이하: 중해상도
       quality = 'medium';
     } else {
-      SCALE = 1.5; // 저해상도 (많은 페이지)
-      quality = 'low';
+      SCALE = 1.2; // 21장 이상: 기본 해상도
+      quality = 'medium';
     }
 
     console.log(`PDF 분석: ${numPages}페이지, 크기 ${fileSizeMB.toFixed(1)}MB`);
@@ -237,8 +229,8 @@ const convertPdfToImages = async (
         viewport: viewport,
       }).promise;
 
-      // 품질 모드에 따라 압축률 조절
-      const blobQuality = quality === 'ultra' ? 0.95 : quality === 'high' ? 0.85 : quality === 'medium' ? 0.75 : 0.65;
+      // 품질 모드에 따라 압축률 조절 (OCR 품질과 페이로드 제한 균형)
+      const blobQuality = quality === 'high' ? 0.8 : quality === 'medium' ? 0.7 : 0.6;
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (blob) => {
@@ -250,9 +242,8 @@ const convertPdfToImages = async (
         );
       });
 
-      // 이미지 압축 (품질 모드에 따라)
-      const useHighQuality = quality === 'ultra' || quality === 'high';
-      const base64 = await resizeAndCompressImage(blob, useHighQuality);
+      // 이미지 압축 (페이로드 제한 때문에 고품질 사용 안 함)
+      const base64 = await resizeAndCompressImage(blob, false);
 
       const uriQuality = blobQuality;
       uploadedFiles.push({
@@ -389,26 +380,26 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
 
             console.log(`총 변환 크기: ${totalSize.toFixed(2)}MB`);
 
-            // 크기 확인 (10MB까지 허용 - Vercel 페이로드 제한 고려)
-            if (totalSize > 10.0) {
+            // 크기 확인 (4.0MB까지 허용 - Vercel 4.5MB 제한에 여유 둠)
+            if (totalSize > 4.0) {
               alert(
                 `변환 후 총 크기가 ${totalSize.toFixed(2)}MB입니다.\n\n` +
-                `최대 크기 10MB를 초과하여 일부 페이지만 업로드합니다.\n` +
-                `처음부터 ${Math.floor(10.0 / (totalSize / uploadedFiles.length))}페이지만 포함됩니다.`
+                `서버 전송 제한(4.0MB)을 초과하여 일부 페이지만 업로드합니다.\n` +
+                `처음부터 약 ${Math.floor(4.0 / (totalSize / uploadedFiles.length))}페이지만 포함됩니다.`
               );
-              // 10.0MB 이하가 될 때까지 페이지 제거
+              // 4.0MB 이하가 될 때까지 페이지 제거
               let currentSize = 0;
               const limitedFiles: UploadedFile[] = [];
               for (const file of uploadedFiles) {
                 const fileSize = file.base64 ? (file.base64.length * 0.75) / (1024 * 1024) : 0;
-                if (currentSize + fileSize <= 10.0) {
+                if (currentSize + fileSize <= 4.0) {
                   limitedFiles.push(file);
                   currentSize += fileSize;
                 } else {
                   break;
                 }
               }
-              console.log(`⚠️ 크기 제한으로 ${limitedFiles.length}/${uploadedFiles.length}페이지만 업로드`);
+              console.log(`⚠️ 크기 제한으로 ${limitedFiles.length}/${uploadedFiles.length}페이지만 업로드 (${currentSize.toFixed(2)}MB)`);
               setSelectedFile(limitedFiles[0]);
               setSelectedFiles(limitedFiles);
               onFileSelect(limitedFiles[0], limitedFiles);
