@@ -33,6 +33,8 @@ export const getErrorMessage = (error: any): string => {
         return '접근 권한이 없습니다.';
       case 404:
         return '요청한 리소스를 찾을 수 없습니다.';
+      case 413:
+        return '대화가 너무 길어졌습니다.\n\n💡 해결 방법:\n1. "면접 종료" 버튼을 눌러 현재 면접을 저장하세요\n2. 새로운 면접을 시작해주세요\n\n※ 면접 기록은 안전하게 저장됩니다.';
       case 429:
         return 'API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.';
       case 500:
