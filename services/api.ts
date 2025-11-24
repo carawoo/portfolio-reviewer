@@ -58,6 +58,9 @@ export const analyzePortfolio = async (
       );
     }
 
+    // 대화 이력을 최근 10개 메시지로 제한 (페이로드 크기 제한)
+    const recentHistory = request.conversationHistory.slice(-10);
+
     const response = await axios.post<AnalysisResponse>(
       `${API_BASE_URL}/analyze`,
       {
@@ -73,7 +76,7 @@ export const analyzePortfolio = async (
         company: request.company,
         position: request.position,
         experience: request.experience,
-        conversationHistory: request.conversationHistory,
+        conversationHistory: recentHistory, // 최근 10개만 전송
         portfolioAnalysis: request.portfolioAnalysis, // 추가: 포트폴리오 분석 결과 전달
       },
       {
@@ -81,6 +84,8 @@ export const analyzePortfolio = async (
         headers: {
           'Content-Type': 'application/json',
         },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
       }
     );
 
