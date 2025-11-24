@@ -15,6 +15,7 @@ interface InterviewReviewProps {
   experience: Experience;
   onSave: (difficultQuestionIds: string[]) => void;
   onClose: () => void;
+  onViewScore?: () => void;
 }
 
 export const InterviewReview: React.FC<InterviewReviewProps> = ({
@@ -24,6 +25,7 @@ export const InterviewReview: React.FC<InterviewReviewProps> = ({
   experience,
   onSave,
   onClose,
+  onViewScore,
 }) => {
   const [difficultQuestions, setDifficultQuestions] = useState<Set<string>>(new Set());
 
@@ -115,6 +117,11 @@ export const InterviewReview: React.FC<InterviewReviewProps> = ({
         <TouchableOpacity style={styles.continueButton} onPress={onClose}>
           <Text style={styles.continueButtonText}>계속 대화하기</Text>
         </TouchableOpacity>
+        {onViewScore && (
+          <TouchableOpacity style={styles.scoreButton} onPress={onViewScore}>
+            <Text style={styles.scoreButtonText}>📊 합격 예상 점수</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>
             {difficultQuestions.size > 0
@@ -256,6 +263,20 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     color: '#666666',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  scoreButton: {
+    flex: 1.5,
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  scoreButtonText: {
+    color: '#2E7D32',
     fontSize: 15,
     fontWeight: '600',
   },

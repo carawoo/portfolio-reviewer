@@ -7,13 +7,14 @@ import { ChatInterface } from './components/ChatInterface';
 import { InterviewReview } from './components/InterviewReview';
 import { SavedInterviews } from './components/SavedInterviews';
 import { SaveSuccessModal } from './components/SaveSuccessModal';
+import { InterviewScore } from './components/InterviewScore';
 import { UploadedFile, Company, Message, Position, Experience, InterviewRecord } from './types';
 import { analyzePortfolio } from './services/api';
 import { saveInterviewRecord, getDifficultQuestions, getCloudBackupConsent, setCloudBackupConsent } from './services/storage';
 import { getErrorMessage, logError } from './utils/errorHandler';
 import { ConsentModal } from './components/ConsentModal';
 
-type Step = 'upload' | 'company' | 'chat' | 'review' | 'saved' | 'viewRecord';
+type Step = 'upload' | 'company' | 'chat' | 'review' | 'saved' | 'viewRecord' | 'score';
 
 export default function App() {
   const [currentStep, setCurrentStep] = useState<Step>('upload');
@@ -221,6 +222,14 @@ export default function App() {
     setCurrentStep('chat');
   };
 
+  const handleViewScore = () => {
+    setCurrentStep('score');
+  };
+
+  const handleCloseScore = () => {
+    setCurrentStep('review');
+  };
+
   const handleViewSaved = () => {
     setCurrentStep('saved');
   };
@@ -389,6 +398,17 @@ export default function App() {
             experience={selectedExperience}
             onSave={handleSaveReview}
             onClose={handleCloseReview}
+            onViewScore={handleViewScore}
+          />
+        )}
+
+        {currentStep === 'score' && (
+          <InterviewScore
+            onClose={handleCloseScore}
+            onSaveScore={(score, feedback) => {
+              console.log('Score:', score, 'Feedback:', feedback);
+              // TODO: 나중에 점수를 저장하는 기능 추가 가능
+            }}
           />
         )}
 
