@@ -63,6 +63,7 @@ export const saveInterviewRecord = async (
     messages,
     createdAt: new Date(),
     difficultQuestions: difficultQuestionIds,
+    files: files,
   };
 
   try {

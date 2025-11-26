@@ -18,6 +18,7 @@
     "@react-native-firebase/firestore": "^23.5.0",
     "@react-native-firebase/storage": "^23.5.0",
     "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
     "expo": "~54.0.25",
     "expo-document-picker": "~14.0.7",
     "expo-file-system": "~19.0.19",

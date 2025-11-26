@@ -189,6 +189,12 @@ export default function App() {
         uploadedFiles.length > 0 ? uploadedFiles : undefined
       );
 
+      console.log('💾 저장된 면접 기록:', {
+        id: savedRecord.id,
+        filesCount: savedRecord.files?.length || 0,
+        files: savedRecord.files?.map(f => f.name)
+      });
+
       // 모달 표시
       setLastSavedRecord(savedRecord);
       setLastDifficultCount(difficultQuestionIds.length);
@@ -250,21 +256,40 @@ export default function App() {
   };
 
   const handleRetryInterview = (record: InterviewRecord) => {
+    console.log('🔄 다시 연습:', {
+      recordId: record.id,
+      filesCount: record.files?.length || 0,
+      files: record.files?.map(f => f.name),
+      messagesCount: record.messages.length
+    });
+
     const confirmed = window.confirm(
       `${record.company.name} 면접을 다시 연습하시겠어요?`
     );
 
     if (confirmed) {
-      // 이전 설정으로 새 면접 시작
+      // 이전 면접 내용 그대로 복원
       setSelectedCompany(record.company);
       setSelectedPosition(record.position);
       setSelectedExperience(record.experience);
-      setMessages([]);
-      setUploadedFile(null);
-      setUploadedFiles([]);
+      setMessages(record.messages); // 이전 대화 내용 복원
       setSelectedRecord(null);
       setShowDifficultOnly(false);
-      setCurrentStep('upload');
+
+      // 파일 정보 복원
+      if (record.files && record.files.length > 0) {
+        console.log('✅ 파일 복원 -> chat 화면으로');
+        setUploadedFiles(record.files);
+        setUploadedFile(record.files[0]);
+        // 파일이 있으면 바로 면접 화면으로
+        setCurrentStep('chat');
+      } else {
+        console.log('❌ 파일 없음 -> upload 화면으로');
+        // 파일이 없으면 업로드 화면으로
+        setUploadedFile(null);
+        setUploadedFiles([]);
+        setCurrentStep('upload');
+      }
     }
   };
 

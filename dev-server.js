@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -50,9 +51,11 @@ app.post('/api/search-company', async (req, res) => {
 });
 
 // Fallback to index.html for SPA routing
-app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api') && req.method === 'GET') {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  } else {
+    next();
   }
 });
 

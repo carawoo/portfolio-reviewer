@@ -62,4 +62,5 @@ export interface InterviewRecord {
   messages: Message[];
   createdAt: Date;
   difficultQuestions: string[]; // 어려웠던 질문 ID 리스트
+  files?: UploadedFile[]; // 업로드된 파일 정보
 }
